@@ -1,0 +1,35 @@
+# Render Blueprint — Streamlit allocator surface (read-only UI).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Apply from Render Dashboard: New + → Blueprint → connect Git repo → select this file.
+# Public URL: https://<name>.onrender.com  (name below must match what you want in the URL)
+#
+# After first deploy, set in dashboard (sync: false prompts):
+#   ALGO_SPHERE_API_URL=https://your-fastapi-service.onrender.com
+
+services:
+  - type: web
+    name: algosphere-investor-dashboard
+    runtime: python
+    plan: free
+    # Root = repo root (where requirements.txt and frontend/ live)
+    buildCommand: pip install -r requirements.txt
+    startCommand: >-
+      streamlit run frontend/dashboard.py
+      --server.port=$PORT
+      --server.address=0.0.0.0
+      --server.headless=true
+      --browser.gatherUsageStats=false
+    # Streamlit serves the app at GET / once the process is listening on $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHONPATH
+        value: .
+      - key: ALGOSPHERE_PUBLIC_SURFACE
+        value: investor
+      - key: ALGO_SPHERE_API_URL
+        sync: false
+      - key: ALGOSPHERE_PRIVATE_INVESTOR_PASSWORD
+        sync: false
+      - key: ALGOSPHERE_PRIVATE_PARTNER_PASSWORD
+        sync: false

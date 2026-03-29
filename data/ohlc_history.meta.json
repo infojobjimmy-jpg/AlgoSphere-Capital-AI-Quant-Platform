@@ -1,0 +1,56 @@
+{
+  "created_utc": "2026-03-29T03:05:01.888450+00:00",
+  "output_csv": "C:\\Users\\jlpat\\algo-sphere\\data\\ohlc_history.csv",
+  "panel_csv": "C:\\Users\\jlpat\\algo-sphere\\data\\ohlc_history_panel.csv",
+  "interval_requested": "1d",
+  "period_requested": "10y",
+  "fetch_preference": "auto",
+  "basket_bars": 2605,
+  "panel_rows": 2605,
+  "symbols_included": [
+    "XAUUSD",
+    "EURUSD",
+    "NAS100",
+    "US30",
+    "SPX500",
+    "USDJPY"
+  ],
+  "symbols_failed": [],
+  "sources_per_symbol": {
+    "XAUUSD": "yahoo",
+    "EURUSD": "yahoo",
+    "NAS100": "yahoo",
+    "US30": "yahoo",
+    "SPX500": "yahoo",
+    "USDJPY": "yahoo"
+  },
+  "yahoo_reference_tickers": {
+    "XAUUSD": "GC=F",
+    "EURUSD": "EURUSD=X",
+    "NAS100": "^NDX",
+    "US30": "^DJI",
+    "SPX500": "^GSPC",
+    "USDJPY": "USDJPY=X"
+  },
+  "date_start": "2016-03-29",
+  "date_end": "2026-03-27",
+  "span_days": 3650,
+  "years_approx": 9.99,
+  "years_approx_per_symbol": {
+    "XAUUSD": 9.99,
+    "EURUSD": 9.99,
+    "NAS100": 9.99,
+    "US30": 9.99,
+    "SPX500": 9.99,
+    "USDJPY": 9.99
+  },
+  "data_source": "Mixed: broker_export | Stooq | Yahoo (see sources_per_symbol)",
+  "limitations": [
+    "Venue symbols differ from broker symbols; validate against your LP.",
+    "Basket close is an equal-weight blend of daily returns, not one listed instrument.",
+    "Daily bars: no true intraday microstructure.",
+    "Stooq may return empty responses on some networks; Yahoo is the typical fallback.",
+    "Dukascopy integration is via manual CSV export unless you add a custom downloader."
+  ],
+  "note": "Set ALGO_SPHERE_DUKASCOPY_EXPORT_DIR or drop files under data/broker_exports/dukascopy/ for vendor history."
+}

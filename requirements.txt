@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+streamlit
+requests
+pydantic
+yfinance
+pandas
+reportlab
+pillow

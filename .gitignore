@@ -1,0 +1,26 @@
+﻿# Environment and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# Python caches
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local runtime database artifacts
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Local runtime/generated artifacts
+*.log
+*.tmp
+*.temp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

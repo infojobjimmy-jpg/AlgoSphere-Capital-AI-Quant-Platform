@@ -1,0 +1,5 @@
+api_url: http://127.0.0.1:8000
+poll_interval: 5
+runner_id: demo_runner_alpha
+max_parallel_jobs: 2
+jobs_limit: 5

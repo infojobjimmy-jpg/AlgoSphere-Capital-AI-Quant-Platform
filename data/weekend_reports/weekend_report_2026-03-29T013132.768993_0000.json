@@ -1,0 +1,480 @@
+{
+  "timestamp_utc": "2026-03-29T01:31:32.768993+00:00",
+  "cycle_index": 35,
+  "demo_only": true,
+  "no_live_trading": true,
+  "history_source": "C:\\Users\\jlpat\\algo-sphere\\data\\ohlc_history.csv+live_extension(50 bars)",
+  "portfolio_weighting": "risk_parity",
+  "bars_used": 567,
+  "generated_count": 800,
+  "evolved_count": 76,
+  "evaluated_count": 876,
+  "top_strategies_by_score": [
+    {
+      "strategy_id": "2bf45627463048e7aad939e576e4136f",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 98.92,
+      "expected_win_rate": 0.64,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.64,
+        "max_drawdown_pct": 2.96,
+        "stability": 0.8656,
+        "composite": 98.92,
+        "total_return": 0.1084,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "c7c68b49a44e485eb28f6c2124c35350",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 98.11,
+      "expected_win_rate": 0.6364,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.6364,
+        "max_drawdown_pct": 1.53,
+        "stability": 0.8719,
+        "composite": 98.11,
+        "total_return": 0.0714,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "21964ec5e4be45108fca7b9af2a13e16",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 96.42,
+      "expected_win_rate": 0.6154,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.6154,
+        "max_drawdown_pct": 2.96,
+        "stability": 0.8656,
+        "composite": 96.42,
+        "total_return": 0.1058,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "3e74b0c2952042608c0fd46660bd9a9f",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 89.98,
+      "expected_win_rate": 0.5625,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5625,
+        "max_drawdown_pct": 2.68,
+        "stability": 0.8697,
+        "composite": 89.98,
+        "total_return": 0.0687,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "ca4165a6aa9340b8bcecfdba00e7e385",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 89.9,
+      "expected_win_rate": 0.5556,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5556,
+        "max_drawdown_pct": 1.53,
+        "stability": 0.8719,
+        "composite": 89.9,
+        "total_return": 0.0693,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "ca4164ffed664f99b37a995e4cd89c45",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 88.58,
+      "expected_win_rate": 0.5333,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5333,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8719,
+        "composite": 88.58,
+        "total_return": 0.088,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "3a835ed4314a4ad994a67da74be49b48",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 84.89,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.875,
+        "composite": 84.89,
+        "total_return": 0.0773,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "4ed5fec939754596902c6419c8477bbb",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 84.29,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.53,
+        "stability": 0.8719,
+        "composite": 84.29,
+        "total_return": 0.0684,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "c60b6dc535314f89bb51f3dfae927290",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 82.68,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 2.68,
+        "stability": 0.8706,
+        "composite": 82.68,
+        "total_return": 0.0561,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "496121733da34de2a284a91525e970ed",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 82.66,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "MUTATED_WEEKEND",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8869,
+        "composite": 82.66,
+        "total_return": 0.0481,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "9a98df1ce5a14c3e9d5abcfdf0855a30",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 82.07,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8887,
+        "composite": 82.07,
+        "total_return": 0.0436,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "c1195f3448f5421bae4df910e470054a",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 82.07,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8887,
+        "composite": 82.07,
+        "total_return": 0.0436,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "6678f581083c4d3a9ca1f7490ca2877b",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 82.07,
+      "expected_win_rate": 0.5,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.5,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8887,
+        "composite": 82.07,
+        "total_return": 0.0436,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "baeef0a21a8d442ca6aeccb939ee4417",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 81.9,
+      "expected_win_rate": 0.4737,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4737,
+        "max_drawdown_pct": 1.62,
+        "stability": 0.8687,
+        "composite": 81.9,
+        "total_return": 0.0744,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "1c4263d8b2ed43f59ef275225e48df82",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 81.59,
+      "expected_win_rate": 0.4706,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4706,
+        "max_drawdown_pct": 1.79,
+        "stability": 0.8708,
+        "composite": 81.59,
+        "total_return": 0.0747,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "1ea7e500d69e4b8cb78c68b03b6fb306",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 79.83,
+      "expected_win_rate": 0.4773,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4773,
+        "max_drawdown_pct": 4.64,
+        "stability": 0.8685,
+        "composite": 79.83,
+        "total_return": 0.0597,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "f7a8f72ef7a94773aec1a8342dc1126b",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 78.8,
+      "expected_win_rate": 0.4545,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4545,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8853,
+        "composite": 78.8,
+        "total_return": 0.054,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "e8b0e92ae28141b3af5de84f3f8039a7",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 78.8,
+      "expected_win_rate": 0.4545,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4545,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8853,
+        "composite": 78.8,
+        "total_return": 0.054,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "00e6359887b947f2830513d0499cd79a",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 78.4,
+      "expected_win_rate": 0.4545,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4545,
+        "max_drawdown_pct": 1.52,
+        "stability": 0.8852,
+        "composite": 78.4,
+        "total_return": 0.0506,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "0b71c045008b488fb1acf03425042301",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 78.36,
+      "expected_win_rate": 0.4651,
+      "expected_drawdown": 40.0,
+      "origin_type": "WEEKEND_GENERATED",
+      "backtest": {
+        "win_rate": 0.4651,
+        "max_drawdown_pct": 4.64,
+        "stability": 0.8685,
+        "composite": 78.36,
+        "total_return": 0.057,
+        "bars": 566
+      }
+    }
+  ],
+  "diversified_portfolio": [
+    {
+      "strategy_id": "67cec024afd84935836c8936f7858a3a",
+      "family": "VOLATILITY_REGIME",
+      "fitness_score": 0.0,
+      "weight": 0.000314,
+      "backtest": {
+        "win_rate": 0.5544,
+        "max_drawdown_pct": 3241.35,
+        "stability": 0.0145,
+        "composite": 0.0,
+        "total_return": -35.3951,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "081f15635a91490483b1387def79ff27",
+      "family": "EMA_CROSS",
+      "fitness_score": 70.74,
+      "weight": 0.000315,
+      "backtest": {
+        "win_rate": 0.5957,
+        "max_drawdown_pct": 9.32,
+        "stability": 0.0145,
+        "composite": 70.74,
+        "total_return": 41.554,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "6258e12e1b904c118cf81df52be82885",
+      "family": "MOMENTUM",
+      "fitness_score": 76.97,
+      "weight": 0.18756,
+      "backtest": {
+        "win_rate": 0.5678,
+        "max_drawdown_pct": 9.47,
+        "stability": 0.8173,
+        "composite": 76.97,
+        "total_return": 0.0137,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "2bf45627463048e7aad939e576e4136f",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 98.92,
+      "weight": 0.215919,
+      "backtest": {
+        "win_rate": 0.64,
+        "max_drawdown_pct": 2.96,
+        "stability": 0.8656,
+        "composite": 98.92,
+        "total_return": 0.1084,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "c7c68b49a44e485eb28f6c2124c35350",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 98.11,
+      "weight": 0.226368,
+      "backtest": {
+        "win_rate": 0.6364,
+        "max_drawdown_pct": 1.53,
+        "stability": 0.8719,
+        "composite": 98.11,
+        "total_return": 0.0714,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "3e74b0c2952042608c0fd46660bd9a9f",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 89.98,
+      "weight": 0.232839,
+      "backtest": {
+        "win_rate": 0.5625,
+        "max_drawdown_pct": 2.68,
+        "stability": 0.8697,
+        "composite": 89.98,
+        "total_return": 0.0687,
+        "bars": 566
+      }
+    },
+    {
+      "strategy_id": "1ea7e500d69e4b8cb78c68b03b6fb306",
+      "family": "MEAN_REVERSION",
+      "fitness_score": 79.83,
+      "weight": 0.136685,
+      "backtest": {
+        "win_rate": 0.4773,
+        "max_drawdown_pct": 4.64,
+        "stability": 0.8685,
+        "composite": 79.83,
+        "total_return": 0.0597,
+        "bars": 566
+      }
+    }
+  ],
+  "risk_profile": {
+    "demo_only": true,
+    "no_execution": true,
+    "aggregate_expected_drawdown_mean": 105.71,
+    "family_mix": {
+      "VOLATILITY_REGIME": 1,
+      "EMA_CROSS": 1,
+      "MOMENTUM": 1,
+      "MEAN_REVERSION": 4
+    },
+    "avg_pairwise_abs_correlation": 0.433,
+    "disclaimer": "Research / replay only. Not investment advice. No live trading.",
+    "diversification_score": 34.25,
+    "quotas_met": false,
+    "portfolio_warnings": [
+      "Could not fill minimum quota for VOLATILITY_REGIME (have 1, need 2)",
+      "Could not fill minimum quota for EMA_CROSS (have 1, need 3)",
+      "Could not fill minimum quota for SESSION_BREAKOUT (have 0, need 3)",
+      "Could not fill minimum quota for MOMENTUM (have 1, need 3)"
+    ]
+  },
+  "portfolio_selection": {
+    "family_hard_cap": 4,
+    "min_quotas_requested": {
+      "EMA_CROSS": 3,
+      "SESSION_BREAKOUT": 3,
+      "MOMENTUM": 3,
+      "MEAN_REVERSION": 3,
+      "VOLATILITY_REGIME": 2
+    },
+    "quotas_met": false,
+    "warnings": [
+      "Could not fill minimum quota for VOLATILITY_REGIME (have 1, need 2)",
+      "Could not fill minimum quota for EMA_CROSS (have 1, need 3)",
+      "Could not fill minimum quota for SESSION_BREAKOUT (have 0, need 3)",
+      "Could not fill minimum quota for MOMENTUM (have 1, need 3)"
+    ],
+    "family_distribution": {
+      "VOLATILITY_REGIME": 1,
+      "EMA_CROSS": 1,
+      "MOMENTUM": 1,
+      "MEAN_REVERSION": 4
+    }
+  },
+  "ready_for_demo_review": true,
+  "evaluated_strategy_count": 876
+}
