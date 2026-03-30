@@ -1,5 +1,12 @@
 import os
+import sys
 from pathlib import Path
+
+# Repo root must be on sys.path so `import backend` works when Streamlit cwd is not the root (e.g. Render).
+_ROOT = Path(__file__).resolve().parents[1]
+_root_s = str(_ROOT)
+if _root_s not in sys.path:
+    sys.path.insert(0, _root_s)
 
 import pandas as pd
 import requests
@@ -13,7 +20,6 @@ from frontend.private_access import ensure_private_access
 from frontend.brand_theme import FAVICON_32_PATH, PAGE_TITLE
 from frontend.public_deploy import PUBLIC_ALLOCATOR_EXPERIENCE_OPTIONS, is_public_allocator_deploy
 
-_ROOT = Path(__file__).resolve().parents[1]
 _env_file = _ROOT / ".env"
 if _env_file.is_file():
     load_dotenv(_env_file)
