@@ -84,6 +84,6 @@ def brand_header_streamlit(logo_path: Path, *, partner_mode: bool = False) -> No
         st.caption("◉")
     st.markdown(
         f'<p style="margin:0.35rem 0 0 0;padding:0;font-size:0.92rem;color:{TEXT};font-weight:500;'
-        f"font-family:'Inter',system-ui,sans-serif;">{html.escape(sub)}</p>",
+        f"font-family:'Inter',system-ui,sans-serif;\">{html.escape(sub)}</p>",
         unsafe_allow_html=True,
     )
