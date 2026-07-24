@@ -21,8 +21,34 @@ logger = logging.getLogger(__name__)
 AISSTREAM_URL = "wss://stream.aisstream.io/v0/stream"
 Publish = Callable[[list[dict[str, Any]]], Awaitable[None]]
 
+def vessel_country(mmsi: str) -> str:
+    mid = str(mmsi)[:3]
+    if mid == "316":
+        return "Canada"
+    if mid in {"303", "338", "366", "367", "368", "369"}:
+        return "USA"
+    return "Other"
 
-def normalize_message(message: dict[str, Any]) -> dict[str, Any] | None:
+
+def vessel_class(code: Any) -> str:
+    try:
+        value = int(code)
+    except (TypeError, ValueError):
+        return "other"
+    if value == 30:
+        return "fishing"
+    if value in {35, 51, 55, 58, 59}:
+        return "government"
+    if 60 <= value <= 69:
+        return "passenger"
+    if 70 <= value <= 79:
+        return "cargo"
+    if 80 <= value <= 89:
+        return "tanker"
+    return "other"
+
+
+def normalize_message(message: dict[str, Any], known: dict[str, Any] | None = None) -> dict[str, Any] | None:
     # AISStream uses ``MetaData`` (capital D). Keep the older spelling for
     # compatibility with recorded fixtures and previously stored messages.
     metadata = message.get("MetaData") or message.get("Metadata") or {}
@@ -40,6 +66,11 @@ def normalize_message(message: dict[str, Any]) -> dict[str, Any] | None:
 
     body = message.get("Message") or {}
     report = next((v for v in body.values() if isinstance(v, dict)), {})
+    ship_type = report.get("Type", report.get("TypeAndCargo"))
+    details = dict(known or {})
+    if ship_type is not None:
+        details["ship_type_code"] = ship_type
+        details["ship_class"] = vessel_class(ship_type)
     return {
         "id": f"mmsi_{mmsi}",
         "mmsi": str(mmsi),
@@ -52,6 +83,8 @@ def normalize_message(message: dict[str, Any]) -> dict[str, Any] | None:
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "ingest_type": "ship",
         "source": "aisstream",
+        "country": vessel_country(str(mmsi)),
+        **details,
     }
 
 
@@ -64,6 +97,7 @@ async def run_ais_stream(publish: Publish) -> None:
             await asyncio.sleep(300)
 
     latest: dict[str, dict[str, Any]] = {}
+    vessel_details: dict[str, dict[str, Any]] = {}
     delay = 2.0
     while True:
         try:
@@ -85,6 +119,8 @@ async def run_ais_stream(publish: Publish) -> None:
                                 "PositionReport",
                                 "StandardClassBPositionReport",
                                 "ExtendedClassBPositionReport",
+                                "ShipStaticData",
+                                "StaticDataReport",
                             ],
                         }
                     )
@@ -92,7 +128,22 @@ async def run_ais_stream(publish: Publish) -> None:
                 delay = 2.0
                 last_publish = asyncio.get_running_loop().time()
                 async for raw in websocket:
-                    row = normalize_message(json.loads(raw))
+                    message = json.loads(raw)
+                    metadata = message.get("MetaData") or message.get("Metadata") or {}
+                    mmsi = str(metadata.get("MMSI", metadata.get("mmsi", "")))
+                    body = message.get("Message") or {}
+                    report = next((v for v in body.values() if isinstance(v, dict)), {})
+                    ship_type = report.get("Type", report.get("TypeAndCargo"))
+                    if mmsi and ship_type is not None:
+                        vessel_details[mmsi] = {
+                            "ship_type_code": ship_type,
+                            "ship_class": vessel_class(ship_type),
+                            "destination": report.get("Destination"),
+                        }
+                        existing = latest.get(f"mmsi_{mmsi}")
+                        if existing:
+                            existing.update(vessel_details[mmsi])
+                    row = normalize_message(message, vessel_details.get(mmsi))
                     if row:
                         latest[row["id"]] = row
                     now = asyncio.get_running_loop().time()

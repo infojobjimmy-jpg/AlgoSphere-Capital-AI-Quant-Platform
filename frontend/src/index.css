@@ -1379,3 +1379,17 @@ body,
   color: var(--danger);
   font-size: 11px;
 }
+.layer-filters{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:8px;margin:12px 0;padding:12px;border:1px solid rgba(79,209,255,.2);border-radius:12px;background:rgba(6,18,34,.72)}
+.layer-filters label{display:flex;flex-direction:column;gap:5px;color:#9fb3cf;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.layer-filters select,.layer-filters input,.account-add input{min-height:36px;border:1px solid #244563;border-radius:8px;background:#071323;color:#e9f5ff;padding:7px 9px}
+.layer-filters--locked{cursor:pointer;opacity:.78;position:relative}
+.layer-filters--locked>strong{grid-column:1/-1;color:#66f2d5;font-size:12px}
+.account-panel{max-width:680px}
+.account-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.account-summary span{padding:12px;background:#081729;border:1px solid #20405b;border-radius:10px;display:flex;flex-direction:column;gap:5px}
+.account-summary small{color:#90a9c7}.account-summary strong{color:#66f2d5}
+.account-panel h3{margin:18px 0 8px}.account-add{display:flex;gap:7px}.account-add input{flex:1}.account-add button{width:40px;border:0;border-radius:8px;background:#54e7ce;font-size:22px}
+.account-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.account-chips button,.account-alerts label{border:1px solid #27506c;background:#0b1c2e;color:#dcecff;border-radius:18px;padding:7px 10px}
+.account-alerts{display:flex;flex-direction:column;gap:7px;margin-top:8px}.account-alerts label{display:flex;align-items:center;gap:8px;border-radius:9px}.account-alerts label button{margin-left:auto;border:0;background:transparent;color:#ff8ba7}
+.account-saved{color:#66f2d5}.account-actions{display:flex;align-items:center;gap:12px;margin-top:18px}.account-actions .subscription-cta{text-align:center;text-decoration:none}
+@media(max-width:850px){.layer-filters{grid-template-columns:1fr 1fr}.account-summary{grid-template-columns:1fr}}

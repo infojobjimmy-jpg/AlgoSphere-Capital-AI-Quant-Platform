@@ -3,6 +3,7 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MemberAccessPanel from "./components/subscriptions/MemberAccessPanel";
 import SubscriptionPanel from "./components/subscriptions/SubscriptionPanel";
+import AccountPanel from "./components/subscriptions/AccountPanel";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -77,6 +78,7 @@ export default function App() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showMemberAccess, setShowMemberAccess] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [authConfigured, setAuthConfigured] = useState(false);
   const [member, setMember] = useState<Record<string, unknown> | null>(null);
   const [showGpsPanel, setShowGpsPanel] = useState(false);
@@ -127,6 +129,12 @@ export default function App() {
   const [showStorms, setShowStorms] = useState(true);
   const [showCams, setShowCams] = useState(true);
   const [showHeat, setShowHeat] = useState(true);
+  const [shipClass, setShipClass] = useState("all");
+  const [shipCountry, setShipCountry] = useState("all");
+  const [aircraftClass, setAircraftClass] = useState("all");
+  const [satCountry, setSatCountry] = useState("all");
+  const [satFunction, setSatFunction] = useState("all");
+  const [satOrbit, setSatOrbit] = useState("all");
 
   const [historyCompare, setHistoryCompare] = useState<{
     fusion_events: Array<Record<string, unknown>>;
@@ -401,6 +409,7 @@ export default function App() {
       const mem = trailMemRef.current;
       const alive = new Set<string>();
       for (const a of layers.aircraft ?? []) {
+        if (aircraftClass !== "all" && String(a.aircraft_class ?? "other") !== aircraftClass) continue;
         const id = String(a.id ?? "");
         if (id) alive.add(id);
       }
@@ -459,6 +468,8 @@ export default function App() {
 
     if (showShips) {
       for (const s of layers.ships ?? []) {
+        if (shipClass !== "all" && String(s.ship_class ?? "other") !== shipClass) continue;
+        if (shipCountry !== "all" && String(s.country ?? "Other") !== shipCountry) continue;
         const lat = Number(s.lat);
         const lon = Number(s.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
@@ -472,6 +483,9 @@ export default function App() {
 
     if (showSats) {
       for (const s of layers.satellites ?? []) {
+        if (satCountry !== "all" && String(s.country ?? "Other") !== satCountry) continue;
+        if (satFunction !== "all" && String(s.function ?? "Other") !== satFunction) continue;
+        if (satOrbit !== "all" && String(s.orbit ?? "Other") !== satOrbit) continue;
         const lat = Number(s.lat);
         const lon = Number(s.lon);
         const altKm = Number(s.alt_km ?? 400);
@@ -550,7 +564,7 @@ export default function App() {
     }
 
     viewer.scene.requestRender();
-  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat]);
+  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, shipClass, shipCountry, satCountry, satFunction, satOrbit]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -798,8 +812,8 @@ export default function App() {
           <button type="button" className="gaios-subscribe-btn" onClick={() => setShowSubscriptions(true)}>
             {lang === "fr" ? "Abonnements" : "Pricing"}
           </button>
-          <button type="button" className="gaios-member-btn" onClick={() => setShowMemberAccess(true)}>
-            {member ? (lang === "fr" ? "Membre actif" : "Active member") : (lang === "fr" ? "Accès membre" : "Member access")}
+          <button type="button" className="gaios-member-btn" onClick={() => member ? setShowAccount(true) : setShowMemberAccess(true)}>
+            {member ? (lang === "fr" ? "Mon compte" : "My account") : (lang === "fr" ? "Accès membre" : "Member access")}
           </button>
           <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
             {lang === "fr" ? "EN" : "FR"}
@@ -896,6 +910,15 @@ export default function App() {
               {lang === "fr" ? "Zones d’activité" : "Activity zones"}
             </label>
           </div>
+          <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
+            <label>{lang === "fr" ? "Navires" : "Ships"}<select value={shipClass} disabled={authConfigured && !member} onChange={(e) => setShipClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="cargo">Cargo</option><option value="tanker">{lang === "fr" ? "Pétrolier" : "Tanker"}</option><option value="passenger">{lang === "fr" ? "Passagers" : "Passenger"}</option><option value="fishing">{lang === "fr" ? "Pêche" : "Fishing"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+            <label>{lang === "fr" ? "Pavillon" : "Flag"}<select value={shipCountry} disabled={authConfigured && !member} onChange={(e) => setShipCountry(e.target.value)}><option value="all">{lang === "fr" ? "Tous les pays" : "All countries"}</option><option value="Canada">Canada</option><option value="USA">USA</option></select></label>
+            <label>{lang === "fr" ? "Avions" : "Aircraft"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+            <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
+            <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
+            <label>{lang === "fr" ? "Orbite" : "Orbit"}<select value={satOrbit} disabled={authConfigured && !member} onChange={(e) => setSatOrbit(e.target.value)}><option value="all">{lang === "fr" ? "Toutes" : "All"}</option><option value="LEO">LEO</option><option value="MEO">MEO</option><option value="GEO">GEO</option></select></label>
+            {authConfigured && !member ? <strong>{lang === "fr" ? "Filtres premium — abonnement requis" : "Premium filters — subscription required"}</strong> : null}
+          </div>
 
           <div className="customer-home">
             <button type="button" className="customer-action" onClick={() => setShowGpsPanel(true)}>
@@ -912,7 +935,7 @@ export default function App() {
                 <small>{lang === "fr" ? "Globe plein écran et couches en direct" : "Fullscreen globe and live layers"}</small>
               </span>
             </button>
-            <button type="button" className="customer-action" onClick={() => member ? setShowMemberAccess(true) : setShowSubscriptions(true)}>
+            <button type="button" className="customer-action" onClick={() => member ? setShowAccount(true) : setShowSubscriptions(true)}>
               <span className="customer-action-icon">★</span>
               <span>
                 <strong>{member ? (lang === "fr" ? "Mon abonnement" : "My membership") : (lang === "fr" ? "Débloquer AlgoSphere" : "Unlock AlgoSphere")}</strong>
@@ -1343,6 +1366,7 @@ export default function App() {
           }}
         />
       ) : null}
+      {showAccount && member ? <AccountPanel lang={lang} member={member} onClose={() => setShowAccount(false)} onLogout={() => { setMember(null); setShowAccount(false); }} /> : null}
       {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
     </div>
   );

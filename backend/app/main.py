@@ -14,6 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.config import settings
 from app.db.session import ensure_database
 from app.routers import account, alerts, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router
+from app.services.whop_auth import configured as auth_configured, read_session
 from app.routers import navigation, self_code, system, trading
 from app.market_hub_bus import market_hub_broadcaster
 from app.websocket_manager import ConnectionManager
@@ -122,7 +123,12 @@ async def websocket_market_hub(ws: WebSocket) -> None:
 
 @app.websocket("/ws/live")
 async def websocket_live(ws: WebSocket) -> None:
-    await manager.connect(ws)
+    member = read_session(ws.cookies.get("algosphere_session"))
+    preview_only = auth_configured() and member is None
+    if preview_only:
+        await ws.accept()
+    else:
+        await manager.connect(ws)
     try:
         import redis.asyncio as redis
 
@@ -130,11 +136,13 @@ async def websocket_live(ws: WebSocket) -> None:
         snap = await client.get(settings.redis_snapshot_key())
         await client.aclose()
         if snap:
+            if preview_only:
+                snap = json.dumps(layers.public_preview(json.loads(snap)), separators=(",", ":"))
             if settings.ws_compress_snapshots:
                 await ws.send_bytes(b"\x02" + gzip.compress(snap.encode("utf-8"), compresslevel=6))
             else:
                 await ws.send_text(snap)
-        while True:
+        while not preview_only:
             msg = await ws.receive_text()
             try:
                 data = json.loads(msg)
@@ -146,4 +154,5 @@ async def websocket_live(ws: WebSocket) -> None:
             if data.get("type") == "ping":
                 await ws.send_json({"type": "pong"})
     except WebSocketDisconnect:
-        manager.disconnect(ws)
+        if not preview_only:
+            manager.disconnect(ws)
