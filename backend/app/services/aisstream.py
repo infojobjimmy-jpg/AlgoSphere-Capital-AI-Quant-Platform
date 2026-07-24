@@ -78,7 +78,9 @@ async def run_ais_stream(publish: Publish) -> None:
                     json.dumps(
                         {
                             "APIKey": settings.aisstream_api_key,
-                            "BoundingBoxes": [[[-90, -180], [90, 180]]],
+                            # Launch region: Canada and the continental United
+                            # States, including Alaska and adjacent waters.
+                            "BoundingBoxes": [[[15, -170], [75, -50]]],
                             "FilterMessageTypes": [
                                 "PositionReport",
                                 "StandardClassBPositionReport",
@@ -95,7 +97,9 @@ async def run_ais_stream(publish: Publish) -> None:
                         latest[row["id"]] = row
                     now = asyncio.get_running_loop().time()
                     if now - last_publish >= 5:
-                        await publish(list(latest.values())[-5000:])
+                        # Keep each Kafka message comfortably below the broker's
+                        # 1 MB limit while retaining a dense regional picture.
+                        await publish(list(latest.values())[-2500:])
                         last_publish = now
         except asyncio.CancelledError:
             raise

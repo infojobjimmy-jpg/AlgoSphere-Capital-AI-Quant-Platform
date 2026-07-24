@@ -63,6 +63,7 @@ function availabilityCount(value: number): React.ReactNode {
 export default function App() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "ready" | "denied">("idle");
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const layersRef = useRef<{
@@ -72,6 +73,7 @@ export default function App() {
     wx: Cesium.PointPrimitiveCollection;
     storms: Cesium.PointPrimitiveCollection;
     cams: Cesium.PointPrimitiveCollection;
+    gps: Cesium.PointPrimitiveCollection;
     trails: Cesium.PolylineCollection;
     heat: Cesium.EntityCollection;
   } | null>(null);
@@ -162,8 +164,8 @@ export default function App() {
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
-        url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        credit: new Cesium.Credit("© OpenStreetMap contributors", false),
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        credit: new Cesium.Credit("Earth imagery © Esri and imagery partners", false),
       }),
     );
 
@@ -174,9 +176,10 @@ export default function App() {
     const wx = primitives.add(new Cesium.PointPrimitiveCollection());
     const storms = primitives.add(new Cesium.PointPrimitiveCollection());
     const cams = primitives.add(new Cesium.PointPrimitiveCollection());
+    const gps = primitives.add(new Cesium.PointPrimitiveCollection());
     const trails = primitives.add(new Cesium.PolylineCollection());
 
-    layersRef.current = { aircraft, ships, sats, wx, storms, cams, trails, heat: viewer.entities };
+    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, trails, heat: viewer.entities };
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-15, 25, 18_000_000),
@@ -554,6 +557,37 @@ export default function App() {
     [leftPct],
   );
 
+  const locateUser = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGpsStatus("denied");
+      return;
+    }
+    setGpsStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const viewer = viewerRef.current;
+        if (!viewer) return;
+        const gps = layersRef.current?.gps;
+        if (!gps) return;
+        gps.removeAll();
+        gps.add({
+          position: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 50),
+          pixelSize: 15,
+          color: Cesium.Color.fromCssColorString("#7af8d6"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 3,
+        });
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 450_000),
+          duration: 1.8,
+        });
+        setGpsStatus("ready");
+      },
+      () => setGpsStatus("denied"),
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+    );
+  }, [lang]);
+
   const globeColStyle =
     fullscreen === "lab"
       ? undefined
@@ -599,6 +633,16 @@ export default function App() {
           <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
             {lang === "fr" ? "EN" : "FR"}
           </button>
+          <button type="button" className="gaios-gps-btn" onClick={locateUser} disabled={gpsStatus === "locating"}>
+            {gpsStatus === "locating"
+              ? (lang === "fr" ? "Localisation…" : "Locating…")
+              : gpsStatus === "ready"
+                ? (lang === "fr" ? "GPS actif" : "GPS active")
+                : (lang === "fr" ? "Ma position GPS" : "My GPS position")}
+          </button>
+          {gpsStatus === "denied" ? (
+            <span className="gps-error">{lang === "fr" ? "Autorisez la localisation dans le navigateur." : "Allow location access in your browser."}</span>
+          ) : null}
           <button
             type="button"
             className={fullscreen === "globe" ? "gaios-fs-btn gaios-fs-on" : "gaios-fs-btn"}

@@ -19,8 +19,10 @@ _OPENSKY_429_BACKOFF_SEC = (2.0, 4.0, 8.0)
 
 # OpenSky public REST: https://openskynetwork.github.io/opensky-api/rest.html
 OPENSKY_URL = "https://opensky-network.org/api/states/all"
-# Public anonymous tier: keep at least 10s between states/all calls (slightly above to reduce 429s).
-OPENSKY_MIN_POLL_INTERVAL_SEC = 12.0
+# Anonymous access has a small daily allowance. A two-minute interval and a
+# regional bounding box avoid exhausting it within minutes.
+OPENSKY_MIN_POLL_INTERVAL_SEC = 120.0
+NORTH_AMERICA_BOUNDS = {"lamin": 15, "lomin": -170, "lamax": 75, "lomax": -50}
 
 
 def _iso_from_unix(ts: Any) -> str:
@@ -40,7 +42,7 @@ async def _fetch_opensky_json() -> Any:
         follow_redirects=True,
     ) as client:
         for attempt in range(4):
-            r = await client.get(OPENSKY_URL)
+            r = await client.get(OPENSKY_URL, params=NORTH_AMERICA_BOUNDS)
             if r.status_code == 429:
                 if attempt < 3:
                     delay = _OPENSKY_429_BACKOFF_SEC[attempt]

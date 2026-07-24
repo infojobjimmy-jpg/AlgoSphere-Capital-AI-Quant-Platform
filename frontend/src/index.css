@@ -115,7 +115,8 @@ body,
 .gaios-brand span { color: var(--accent); }
 
 .gaios-subscribe-btn,
-.gaios-lang-btn {
+.gaios-lang-btn,
+.gaios-gps-btn {
   border: 1px solid rgba(122, 248, 214, 0.55);
   border-radius: 10px;
   color: #041018;
@@ -130,6 +131,15 @@ body,
   color: #dff9ff;
   background: rgba(6, 12, 22, 0.82);
 }
+
+.gaios-gps-btn {
+  border-color: rgba(255, 209, 102, 0.55);
+  color: #fff4cf;
+  background: rgba(6, 12, 22, 0.82);
+}
+
+.gaios-gps-btn:disabled { opacity: .65; }
+.gps-error { color: #ffd166; font-size: 11px; }
 
 .subscription-backdrop {
   position: fixed;
