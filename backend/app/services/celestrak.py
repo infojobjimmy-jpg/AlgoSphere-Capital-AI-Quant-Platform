@@ -6,14 +6,14 @@ from typing import Any
 
 from skyfield.api import EarthSatellite, load
 
-from app.services.resilient_http import get_json, get_text
+from app.services.resilient_http import get_text
 
 logger = logging.getLogger(__name__)
 
-# GP JSON (active catalog) — primary source per ops requirement
-ACTIVE_GP_JSON = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json"
-# Classic TLE text — fallback if JSON unavailable
-STATIONS_TLE = "https://celestrak.org/NORAD/elements/stations.txt"
+# The full active catalog is rate-limited by CelesTrak and returns 403 when
+# polled frequently from a shared cloud address. The stations group is a
+# stable, official, compact TLE feed suitable for the public globe.
+STATIONS_TLE = "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle"
 
 
 def _parse_tle_blocks(text: str) -> list[tuple[str, str, str]]:
@@ -81,17 +81,10 @@ async def fetch_satellites() -> list[dict[str, Any]]:
     blocks: list[tuple[str, str, str]] = []
 
     try:
-        data = await get_json(ACTIVE_GP_JSON, timeout=45.0)
-        blocks = _gp_json_to_tle_blocks(data)
+        text = await get_text(STATIONS_TLE, timeout=50.0)
+        blocks = _parse_tle_blocks(text)
     except Exception:
-        logger.exception("celestrak active GP JSON failed; trying stations TLE text")
-
-    if not blocks:
-        try:
-            text = await get_text(STATIONS_TLE, timeout=50.0)
-            blocks = _parse_tle_blocks(text)
-        except Exception:
-            logger.exception("celestrak stations TLE fallback failed")
+        logger.exception("celestrak stations TLE feed failed")
 
     if not blocks:
         logger.warning("satellite sources unavailable; publishing an empty satellite layer")

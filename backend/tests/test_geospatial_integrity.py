@@ -6,7 +6,7 @@ from app.services.aisstream import normalize_message
 def test_ais_position_normalization() -> None:
     row = normalize_message(
         {
-            "Metadata": {
+            "MetaData": {
                 "MMSI": 316001245,
                 "ShipName": "TEST VESSEL",
                 "Latitude": 45.5,

@@ -23,7 +23,9 @@ Publish = Callable[[list[dict[str, Any]]], Awaitable[None]]
 
 
 def normalize_message(message: dict[str, Any]) -> dict[str, Any] | None:
-    metadata = message.get("Metadata") or {}
+    # AISStream uses ``MetaData`` (capital D). Keep the older spelling for
+    # compatibility with recorded fixtures and previously stored messages.
+    metadata = message.get("MetaData") or message.get("Metadata") or {}
     lat = metadata.get("latitude", metadata.get("Latitude"))
     lon = metadata.get("longitude", metadata.get("Longitude"))
     mmsi = metadata.get("MMSI", metadata.get("mmsi"))

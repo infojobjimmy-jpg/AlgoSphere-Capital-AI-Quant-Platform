@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 WINDY_WEBCAMS_URL = "https://api.windy.com/webcams/api/v3/webcams"
 
 
-async def fetch_windy_webcams(limit: int = 100) -> list[dict[str, Any]]:
+async def fetch_windy_webcams(limit: int = 50) -> list[dict[str, Any]]:
     if not settings.windy_webcams_api_key:
         return []
     params = {
-        "limit": max(1, min(limit, 250)),
+        # Windy Webcams V3 rejects list requests above 50 items.
+        "limit": max(1, min(limit, 50)),
         "include": "images,location,player,urls",
     }
     headers = {"x-windy-api-key": settings.windy_webcams_api_key}
