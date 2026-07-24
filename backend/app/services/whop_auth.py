@@ -88,4 +88,7 @@ async def validate_license(license_key: str) -> dict[str, Any]:
         "status": status,
         "user_id": str(user.get("id") or ""),
         "username": str(user.get("username") or ""),
+        "expires_at": membership.get("expires_at") or membership.get("renewal_period_end"),
+        "manage_url": membership.get("manage_url"),
+        "product_name": str(product.get("title") or product.get("name") or product_id),
     }

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # polled frequently from a shared cloud address. The stations group is a
 # stable, official, compact TLE feed suitable for the public globe.
 STATIONS_TLE = "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle"
+ISS_POSITION = "https://api.wheretheiss.at/v1/satellites/25544"
 
 
 def _parse_tle_blocks(text: str) -> list[tuple[str, str, str]]:
@@ -87,8 +88,29 @@ async def fetch_satellites() -> list[dict[str, Any]]:
         logger.exception("celestrak stations TLE feed failed")
 
     if not blocks:
-        logger.warning("satellite sources unavailable; publishing an empty satellite layer")
-        return []
+        logger.warning("CelesTrak unavailable; using live ISS position fallback")
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "AlgoSphereGlobal/1.0"}) as client:
+                response = await client.get(ISS_POSITION)
+                response.raise_for_status()
+                item = response.json()
+            return [{
+                "id": "25544",
+                "label": "ISS (ZARYA)",
+                "lat": float(item["latitude"]),
+                "lon": float(item["longitude"]),
+                "alt_km": float(item.get("altitude") or 0),
+                "country": "International",
+                "function": "Space station",
+                "orbit": "LEO",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "ingest_type": "satellite",
+                "source": "wheretheiss.at",
+            }]
+        except Exception:
+            logger.exception("ISS fallback unavailable; publishing an empty satellite layer")
+            return []
 
     positions = propagate_positions(blocks, when=when)
     if not positions:
