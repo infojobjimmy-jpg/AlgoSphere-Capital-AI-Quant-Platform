@@ -1,8 +1,7 @@
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import FloatingAiRobot from "./components/ai/FloatingAiRobot";
-import GlobeAdvisoryPanel from "./components/globe/GlobeAdvisoryPanel";
+import SubscriptionPanel from "./components/subscriptions/SubscriptionPanel";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -62,6 +61,8 @@ function availabilityCount(value: number): React.ReactNode {
 }
 
 export default function App() {
+  const [lang, setLang] = useState<"fr" | "en">("fr");
+  const [showSubscriptions, setShowSubscriptions] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const layersRef = useRef<{
@@ -69,6 +70,7 @@ export default function App() {
     ships: Cesium.PointPrimitiveCollection;
     sats: Cesium.PointPrimitiveCollection;
     wx: Cesium.PointPrimitiveCollection;
+    storms: Cesium.PointPrimitiveCollection;
     cams: Cesium.PointPrimitiveCollection;
     trails: Cesium.PolylineCollection;
     heat: Cesium.EntityCollection;
@@ -86,6 +88,7 @@ export default function App() {
   const [showSats, setShowSats] = useState(true);
   const [showShips, setShowShips] = useState(true);
   const [showWeather, setShowWeather] = useState(true);
+  const [showStorms, setShowStorms] = useState(true);
   const [showCams, setShowCams] = useState(true);
   const [showHeat, setShowHeat] = useState(true);
 
@@ -122,6 +125,7 @@ export default function App() {
       ships: (layers.ships ?? []).length,
       cameras: (layers.cameras ?? []).length,
       weather: (layers.weather ?? []).length,
+      storms: (layers.storms ?? []).length,
       updated: String(snap?.meta?.updated_at ?? "—"),
     };
   }, [snap]);
@@ -168,10 +172,11 @@ export default function App() {
     const ships = primitives.add(new Cesium.PointPrimitiveCollection());
     const sats = primitives.add(new Cesium.PointPrimitiveCollection());
     const wx = primitives.add(new Cesium.PointPrimitiveCollection());
+    const storms = primitives.add(new Cesium.PointPrimitiveCollection());
     const cams = primitives.add(new Cesium.PointPrimitiveCollection());
     const trails = primitives.add(new Cesium.PolylineCollection());
 
-    layersRef.current = { aircraft, ships, sats, wx, cams, trails, heat: viewer.entities };
+    layersRef.current = { aircraft, ships, sats, wx, storms, cams, trails, heat: viewer.entities };
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-15, 25, 18_000_000),
@@ -331,6 +336,7 @@ export default function App() {
     L.ships.removeAll();
     L.sats.removeAll();
     L.wx.removeAll();
+    L.storms.removeAll();
     L.cams.removeAll();
     L.trails.removeAll();
     L.heat.removeAll();
@@ -439,6 +445,22 @@ export default function App() {
       }
     }
 
+    if (showStorms) {
+      for (const storm of layers.storms ?? []) {
+        const lat = Number(storm.lat);
+        const lon = Number(storm.lon);
+        const wind = Number(storm.wind_kn ?? 0);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        L.storms.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 55_000),
+          color: wind >= 64 ? Cesium.Color.fromCssColorString("#ff477e") : Cesium.Color.fromCssColorString("#ffb703"),
+          pixelSize: 13 + Cesium.Math.clamp(wind / 20, 0, 8),
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
+          outlineWidth: 2,
+        });
+      }
+    }
+
     if (showCams) {
       for (const c of layers.cameras ?? []) {
         const lat = Number(c.lat);
@@ -474,7 +496,7 @@ export default function App() {
     }
 
     viewer.scene.requestRender();
-  }, [snap, showAircraft, showSats, showShips, showWeather, showCams, showHeat]);
+  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -493,8 +515,6 @@ export default function App() {
     });
     viewer.scene.requestRender();
   }, [snap]);
-
-  const globeSnap = snap as unknown as Record<string, unknown> | null;
 
   const onSplitPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -557,7 +577,6 @@ export default function App() {
         style={globeColStyle}
       >
         <div ref={hostRef} className="gaios-cesium" />
-        {fullscreen !== "lab" ? <GlobeAdvisoryPanel snapshot={globeSnap} /> : null}
       </div>
       {fullscreen === null ? (
         <div
@@ -573,30 +592,37 @@ export default function App() {
         style={rightColStyle}
       >
         <div className="gaios-workspace-toolbar">
+          <div className="gaios-brand">ALGOSPHERE <span>GLOBAL</span></div>
+          <button type="button" className="gaios-subscribe-btn" onClick={() => setShowSubscriptions(true)}>
+            {lang === "fr" ? "Abonnements" : "Pricing"}
+          </button>
+          <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
+            {lang === "fr" ? "EN" : "FR"}
+          </button>
           <button
             type="button"
             className={fullscreen === "globe" ? "gaios-fs-btn gaios-fs-on" : "gaios-fs-btn"}
             onClick={() => setFullscreen((f) => (f === "globe" ? null : "globe"))}
           >
-            {fullscreen === "globe" ? "Exit Globe fullscreen" : "Globe fullscreen"}
+            {fullscreen === "globe" ? (lang === "fr" ? "Quitter le plein écran" : "Exit fullscreen") : (lang === "fr" ? "Globe plein écran" : "Globe fullscreen")}
           </button>
           <button
             type="button"
             className={fullscreen === "lab" ? "gaios-fs-btn gaios-fs-on" : "gaios-fs-btn"}
             onClick={() => setFullscreen((f) => (f === "lab" ? null : "lab"))}
           >
-            {fullscreen === "lab" ? "Exit Intelligence fullscreen" : "Intelligence fullscreen"}
+            {fullscreen === "lab" ? (lang === "fr" ? "Quitter le plein écran" : "Exit fullscreen") : (lang === "fr" ? "Intelligence plein écran" : "Intelligence fullscreen")}
           </button>
         </div>
         <div className="gaios-panel gaios-panel--dock">
           <div className="gaios-title">
-            <h1>COPIE PALANTIR</h1>
-            <span>Unified geospatial intelligence · verified global data</span>
+            <h1>ALGOSPHERE GLOBAL</h1>
+            <span>{lang === "fr" ? "Intelligence géospatiale unifiée · données mondiales vérifiées" : "Unified geospatial intelligence · verified global data"}</span>
           </div>
 
           <div className="grid">
             <div className="stat">
-              <label>Aircraft</label>
+              <label>{lang === "fr" ? "Avions" : "Aircraft"}</label>
               <strong>{availabilityCount(counts.aircraft)}</strong>
             </div>
             <div className="stat">
@@ -604,15 +630,19 @@ export default function App() {
               <strong>{availabilityCount(counts.satellites)}</strong>
             </div>
             <div className="stat">
-              <label>Ships</label>
+              <label>{lang === "fr" ? "Navires" : "Ships"}</label>
               <strong>{availabilityCount(counts.ships)}</strong>
             </div>
             <div className="stat">
-              <label>Weather cells</label>
+              <label>{lang === "fr" ? "Météo" : "Weather"}</label>
               <strong>{availabilityCount(counts.weather)}</strong>
             </div>
             <div className="stat">
-              <label>Cameras</label>
+              <label>{lang === "fr" ? "Tempêtes actives" : "Active storms"}</label>
+              <strong>{counts.storms}</strong>
+            </div>
+            <div className="stat">
+              <label>{lang === "fr" ? "Caméras" : "Cameras"}</label>
               <strong>{availabilityCount(counts.cameras)}</strong>
             </div>
             <div className="stat">
@@ -637,6 +667,10 @@ export default function App() {
             <label className="toggle">
               <input type="checkbox" checked={showWeather} onChange={(e) => setShowWeather(e.target.checked)} />
               Weather
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={showStorms} onChange={(e) => setShowStorms(e.target.checked)} />
+              {lang === "fr" ? "Tempêtes et ouragans" : "Storms & hurricanes"}
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showCams} onChange={(e) => setShowCams(e.target.checked)} />
@@ -957,7 +991,7 @@ export default function App() {
           </div>
         </div>
       </div>
-      <FloatingAiRobot />
+      {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
     </div>
   );
 }

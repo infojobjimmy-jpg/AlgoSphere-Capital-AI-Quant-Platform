@@ -14,6 +14,7 @@ from app.market.binance_ws import run_binance_ws_stream
 from app.market.finnhub import fetch_equity_sample
 from app.market.twelve_data import fetch_forex_sample
 from app.services.camera_pipeline import fetch_cameras_for_telemetry
+from app.services.nhc_storms import fetch_active_storms
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("acap.ingestion")
@@ -64,6 +65,17 @@ async def loop_weather(bus: KafkaBus) -> None:
             logger.exception("weather ingest failed")
             await emit(bus, "weather", [])
         await asyncio.sleep(120.0)
+
+
+async def loop_storms(bus: KafkaBus) -> None:
+    while True:
+        try:
+            storms = await fetch_active_storms()
+            await emit(bus, "storms", storms)
+        except Exception:
+            logger.exception("active storm ingest failed")
+            await emit(bus, "storms", [])
+        await asyncio.sleep(300.0)
 
 
 async def loop_ships(bus: KafkaBus) -> None:
@@ -136,6 +148,7 @@ async def main() -> None:
             loop_aircraft(bus),
             loop_satellites(bus),
             loop_weather(bus),
+            loop_storms(bus),
             loop_ships(bus),
             loop_cameras(bus),
         ]

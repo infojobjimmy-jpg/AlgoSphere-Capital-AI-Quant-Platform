@@ -30,6 +30,7 @@ async def main() -> None:
         "aircraft": [],
         "satellites": [],
         "weather": [],
+        "storms": [],
         "ships": [],
         "cameras": [],
         "market_crypto": [],
