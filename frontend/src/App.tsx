@@ -63,6 +63,16 @@ function availabilityCount(value: number): React.ReactNode {
   return value > 0 ? value : <span className="source-unavailable">Unavailable</span>;
 }
 
+function publicGeospatialText(value: unknown): string {
+  return String(value ?? "")
+    .replace(/maritime demo/gi, "maritime tracks")
+    .replace(/démo maritime/gi, "pistes maritimes");
+}
+
+function isPublicGeospatialTrace(value: unknown): boolean {
+  return !/\b(trade|trading|broker|portfolio|market hub|paper execution)\b/i.test(String(value ?? ""));
+}
+
 export default function App() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
@@ -924,7 +934,7 @@ export default function App() {
               {(snap?.insights ?? []).slice(0, 5).map((it, idx) => (
                 <div key={String(it.text ?? idx).slice(0, 40) || String(idx)} className="intelrow">
                   <span className="pill sev_info">AI</span>
-                  <span className="inteltxt">{String(it.text ?? "")}</span>
+                  <span className="inteltxt">{publicGeospatialText(it.text)}</span>
                 </div>
               ))}
               {(snap?.insights ?? []).length === 0 ? (
@@ -1096,12 +1106,12 @@ export default function App() {
           <div className="intelblock">
             <label>AI reasoning trace</label>
             <div className="trace">
-              {((snap?.meta?.reasoning_trace as string[] | undefined) ?? []).map((ln, idx) => (
+              {((snap?.meta?.reasoning_trace as string[] | undefined) ?? []).filter(isPublicGeospatialTrace).map((ln, idx) => (
                 <div key={`${idx}-${ln.slice(0, 20)}`} className="traceln">
-                  {ln}
+                  {publicGeospatialText(ln)}
                 </div>
               ))}
-              {((snap?.meta?.reasoning_trace as string[] | undefined) ?? []).length === 0 ? (
+              {((snap?.meta?.reasoning_trace as string[] | undefined) ?? []).filter(isPublicGeospatialTrace).length === 0 ? (
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>Trace warming…</div>
               ) : null}
             </div>
