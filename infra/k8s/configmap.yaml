@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gaios-config
+  namespace: gaios
+data:
+  DATABASE_URL: postgresql+asyncpg://gaios:gaios@timescaledb:5432/gaios
+  REDIS_URL: redis://redis:6379/0
+  KAFKA_BOOTSTRAP: kafka:9092
+  CHROMA_HOST: chromadb
+  CHROMA_PORT: "8000"
+  WEBCAM_REGISTRY_PATH: /app/config/webcams.example.json

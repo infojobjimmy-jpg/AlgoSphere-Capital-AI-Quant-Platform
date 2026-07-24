@@ -160,6 +160,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8080
     env_file:
       - ./backend/.env.example
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://gaios:gaios@db:5432/gaios
       REDIS_URL: redis://redis:6379/0
@@ -168,6 +169,7 @@ services:
       CHROMA_PORT: "8000"
       WEBCAM_REGISTRY_PATH: /app/config/webcams.example.json
       WS_COMPRESS_SNAPSHOTS: "false"
+      PUBLIC_GEOSPATIAL_MODE: "true"
     ports:
       - "8080:8080"
     depends_on:
@@ -200,6 +202,7 @@ services:
     command: python -m app.workers.ingestion_runner
     env_file:
       - ./backend/.env.example
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://gaios:gaios@db:5432/gaios
       REDIS_URL: redis://redis:6379/0
@@ -227,6 +230,7 @@ services:
     command: python -m app.workers.camera_worker
     env_file:
       - ./backend/.env.example
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+asyncpg://gaios:gaios@db:5432/gaios
       REDIS_URL: redis://redis:6379/0

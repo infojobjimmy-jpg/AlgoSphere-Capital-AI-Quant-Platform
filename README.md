@@ -1,6 +1,8 @@
 # Algosphere Capital
 
-**Unified intelligence + markets platform** — one Cortex cognitive loop, fusion over global public data, meta-learning & evolutionary strategy layers, and a **paper trading** engine with mandatory risk controls.
+**Unified geospatial intelligence platform** — a live Cesium globe for aircraft,
+satellites, weather, licensed AIS vessels and approved webcams. The public
+deployment is geospatial-only and contains no trading terminal.
 
 ## Quick start (local)
 
@@ -53,6 +55,9 @@ Full OpenAPI: `/docs`.
 
 ## Production notes
 
+- Keep `PUBLIC_GEOSPATIAL_MODE=true` for the public globe. This disables market
+  ingestion, the trading hook, and trading/self-code routes.
+- See `docs/PRODUCTION_READINESS.md` for AIS, webcam, HTTPS and deployment setup.
 - Live mode runs through explicit broker adapters and stays feature-flagged; keep API tokens in secrets and enable only in approved environments.
 - **Secrets**: inject via Docker/Kubernetes secrets, not committed `.env`.
 - **Scale**: horizontal Kafka consumers; split `bridge` / `ingestion` replicas; managed Redis/Postgres/Timescale.

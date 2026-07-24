@@ -3,7 +3,6 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloatingAiRobot from "./components/ai/FloatingAiRobot";
 import GlobeAdvisoryPanel from "./components/globe/GlobeAdvisoryPanel";
-import TradingDashboard from "./components/trading/TradingDashboard";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -26,7 +25,6 @@ type Snapshot = {
     strategy?: StrategySnap;
     cortex?: { loop?: string; agents?: string[]; phases?: Array<Record<string, unknown>> };
     evolution?: { guidance?: Record<string, unknown> };
-    trading?: { signals_preview?: Array<Record<string, unknown>>; mode?: string; live_broker?: string };
   };
   layers?: Record<string, Array<Record<string, unknown>>>;
   alerts?: Array<Record<string, unknown>>;
@@ -57,6 +55,10 @@ function colorForTempC(t: number | undefined): Cesium.Color {
   if (t === undefined || Number.isNaN(t)) return Cesium.Color.fromCssColorString("#4fd1ff");
   const u = Cesium.Math.clamp((t + 20) / 60, 0, 1);
   return Cesium.Color.fromHsl(0.58 - 0.35 * u, 0.9, 0.55, 0.95);
+}
+
+function availabilityCount(value: number): React.ReactNode {
+  return value > 0 ? value : <span className="source-unavailable">Unavailable</span>;
 }
 
 export default function App() {
@@ -99,8 +101,6 @@ export default function App() {
     recent_plans: Array<Record<string, unknown>>;
   } | null>(null);
 
-  const [portfolio, setPortfolio] = useState<Record<string, unknown> | null>(null);
-  const [hudTab, setHudTab] = useState<"globe" | "lab">("globe");
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const [leftPct, setLeftPct] = useState(40);
   const [fullscreen, setFullscreen] = useState<null | "globe" | "lab">(null);
@@ -122,9 +122,6 @@ export default function App() {
       ships: (layers.ships ?? []).length,
       cameras: (layers.cameras ?? []).length,
       weather: (layers.weather ?? []).length,
-      crypto: (layers.market_crypto ?? []).length,
-      forex: (layers.market_forex ?? []).length,
-      equities: (layers.market_equities ?? []).length,
       updated: String(snap?.meta?.updated_at ?? "—"),
     };
   }, [snap]);
@@ -319,25 +316,6 @@ export default function App() {
     };
     void load();
     const t = window.setInterval(load, 45_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const r = await fetch(`${apiBase}/trading/portfolio`);
-        const j = await r.json();
-        if (!cancelled) setPortfolio(j as Record<string, unknown>);
-      } catch {
-        if (!cancelled) setPortfolio(null);
-      }
-    };
-    void load();
-    const t = window.setInterval(load, 20_000);
     return () => {
       cancelled = true;
       window.clearInterval(t);
@@ -579,7 +557,7 @@ export default function App() {
         style={globeColStyle}
       >
         <div ref={hostRef} className="gaios-cesium" />
-        {hudTab === "globe" && fullscreen !== "lab" ? <GlobeAdvisoryPanel snapshot={globeSnap} /> : null}
+        {fullscreen !== "lab" ? <GlobeAdvisoryPanel snapshot={globeSnap} /> : null}
       </div>
       {fullscreen === null ? (
         <div
@@ -607,127 +585,39 @@ export default function App() {
             className={fullscreen === "lab" ? "gaios-fs-btn gaios-fs-on" : "gaios-fs-btn"}
             onClick={() => setFullscreen((f) => (f === "lab" ? null : "lab"))}
           >
-            {fullscreen === "lab" ? "Exit Hub fullscreen" : "Market Hub fullscreen"}
+            {fullscreen === "lab" ? "Exit Intelligence fullscreen" : "Intelligence fullscreen"}
           </button>
         </div>
-        <div className={hudTab === "lab" ? "gaios-panel gaios-panel--dock gaios-panel-lab" : "gaios-panel gaios-panel--dock"}>
-          <div className="gaios-tabs" role="tablist" aria-label="Primary workspace">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={hudTab === "globe"}
-              className={hudTab === "globe" ? "gaios-tab gaios-tab-on" : "gaios-tab"}
-              onClick={() => setHudTab("globe")}
-            >
-              Globe Intelligence
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={hudTab === "lab"}
-              className={hudTab === "lab" ? "gaios-tab gaios-tab-on" : "gaios-tab"}
-              onClick={() => setHudTab("lab")}
-            >
-              Market Hub
-            </button>
-          </div>
-          {hudTab === "lab" ? (
-            <TradingDashboard />
-          ) : (
-            <>
+        <div className="gaios-panel gaios-panel--dock">
           <div className="gaios-title">
             <h1>COPIE PALANTIR</h1>
-            <span>Unified intelligence · global data · paper/live execution</span>
+            <span>Unified geospatial intelligence · verified global data</span>
           </div>
 
           <div className="grid">
             <div className="stat">
               <label>Aircraft</label>
-              <strong>{counts.aircraft}</strong>
+              <strong>{availabilityCount(counts.aircraft)}</strong>
             </div>
             <div className="stat">
               <label>Satellites</label>
-              <strong>{counts.satellites}</strong>
+              <strong>{availabilityCount(counts.satellites)}</strong>
             </div>
             <div className="stat">
-              <label>Ships (demo)</label>
-              <strong>{counts.ships}</strong>
+              <label>Ships</label>
+              <strong>{availabilityCount(counts.ships)}</strong>
             </div>
             <div className="stat">
               <label>Weather cells</label>
-              <strong>{counts.weather}</strong>
+              <strong>{availabilityCount(counts.weather)}</strong>
             </div>
             <div className="stat">
               <label>Cameras</label>
-              <strong>{counts.cameras}</strong>
-            </div>
-            <div className="stat">
-              <label>Crypto ticks</label>
-              <strong>{counts.crypto}</strong>
-            </div>
-            <div className="stat">
-              <label>Forex ticks</label>
-              <strong>{counts.forex}</strong>
-            </div>
-            <div className="stat">
-              <label>Equity ticks</label>
-              <strong>{counts.equities}</strong>
+              <strong>{availabilityCount(counts.cameras)}</strong>
             </div>
             <div className="stat">
               <label>Updated</label>
               <strong style={{ fontSize: 12, color: "var(--muted)" }}>{counts.updated}</strong>
-            </div>
-          </div>
-
-          <div className="intelblock">
-            <label>Paper portfolio &amp; risk</label>
-            <div className="learngrid">
-              <div className="stat">
-                <label>Equity (USD)</label>
-                <strong>{String((portfolio?.paper as Record<string, unknown> | undefined)?.equity ?? "—")}</strong>
-              </div>
-              <div className="stat">
-                <label>Cash (USD)</label>
-                <strong>{String((portfolio?.paper as Record<string, unknown> | undefined)?.cash ?? "—")}</strong>
-              </div>
-              <div className="stat">
-                <label>Kill switch</label>
-                <strong>{String(portfolio?.kill_switch ?? "—")}</strong>
-              </div>
-            </div>
-            <div className="sub" style={{ marginTop: 6 }}>
-              Orders API <span className="mono">GET /api/trading/orders</span> · Server enforces max 1% equity per
-              paper trade, mandatory stop, and drawdown gate (see <span className="mono">app/trading/risk.py</span>).
-            </div>
-          </div>
-
-          <div className="intelblock">
-            <label>Trading signals (live preview)</label>
-            <div className="sub" style={{ marginTop: 6 }}>
-              Mode: <span className="mono">{String((snap?.meta?.trading as Record<string, unknown> | undefined)?.mode ?? "paper")}</span>
-              {" · "}
-              Broker:{" "}
-              <span className="mono">
-                {String((snap?.meta?.trading as Record<string, unknown> | undefined)?.live_broker ?? "mt5")}
-              </span>
-            </div>
-            <div className="intelitems">
-              {(((snap?.meta?.trading as Record<string, unknown> | undefined)?.signals_preview as Array<Record<string, unknown>>) ?? [])
-                .slice(0, 6)
-                .map((s, idx) => (
-                  <div key={`${String(s.symbol ?? idx)}-${String(s.side ?? "")}`} className="intelrow">
-                    <span className="pill sev_info">{String(s.side ?? "signal")}</span>
-                    <span className="inteltxt">
-                      <span className="mono">{String(s.symbol ?? "—")}</span> ·{" "}
-                      {typeof s.strength === "number" ? Number(s.strength).toFixed(3) : "—"}
-                      <div className="sub">{String(s.rationale ?? "").slice(0, 180)}</div>
-                    </span>
-                  </div>
-                ))}
-              {((((snap?.meta?.trading as Record<string, unknown> | undefined)?.signals_preview as Array<Record<string, unknown>>) ?? []).length ===
-              0) ? (
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>No trading signals in this frame.</div>
-              ) : null}
             </div>
           </div>
 
@@ -1062,12 +952,9 @@ export default function App() {
           </div>
 
           <div className="footer">
-            Public, lawful feeds only (OpenSky, Celestrak, Open‑Meteo). Ships are synthetic lane traffic for
-            visualization; swap in a licensed AIS provider for operations. Configure Cesium Ion token for
-            premium imagery/terrain if desired.
+            Public, lawful feeds only. Unavailable sources remain empty and are never replaced with simulated
+            objects. Configure approved AIS and webcam providers plus Cesium Ion for production coverage.
           </div>
-            </>
-          )}
         </div>
       </div>
       <FloatingAiRobot />

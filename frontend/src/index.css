@@ -498,6 +498,12 @@ body,
   color: var(--accent);
 }
 
+.source-unavailable {
+  color: #ffb454;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
