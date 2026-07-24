@@ -84,6 +84,8 @@ export default function App() {
   const [destination, setDestination] = useState("");
   const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number; destination: string; warning?: string } | null>(null);
+  const [roadStatus, setRoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [roadCounts, setRoadCounts] = useState({ cameras: 0, inspections: 0, restAreas: 0, events: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const layersRef = useRef<{
@@ -94,6 +96,7 @@ export default function App() {
     storms: Cesium.PointPrimitiveCollection;
     cams: Cesium.PointPrimitiveCollection;
     gps: Cesium.PointPrimitiveCollection;
+    road: Cesium.PointPrimitiveCollection;
     route: Cesium.PolylineCollection;
     trails: Cesium.PolylineCollection;
     heat: Cesium.EntityCollection;
@@ -213,10 +216,11 @@ export default function App() {
     const storms = primitives.add(new Cesium.PointPrimitiveCollection());
     const cams = primitives.add(new Cesium.PointPrimitiveCollection());
     const gps = primitives.add(new Cesium.PointPrimitiveCollection());
+    const road = primitives.add(new Cesium.PointPrimitiveCollection());
     const route = primitives.add(new Cesium.PolylineCollection());
     const trails = primitives.add(new Cesium.PolylineCollection());
 
-    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, route, trails, heat: viewer.entities };
+    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, road, route, trails, heat: viewer.entities };
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-15, 25, 18_000_000),
@@ -690,6 +694,57 @@ export default function App() {
       setRouteStatus("error");
     }
   }, [authConfigured, currentPosition, destination, gpsMode, locateUser, member]);
+
+  useEffect(() => {
+    if (!currentPosition || (authConfigured && !member)) return;
+    let active = true;
+    setRoadStatus("loading");
+    const load = async () => {
+      try {
+        const params = new URLSearchParams({
+          lat: String(currentPosition.lat),
+          lon: String(currentPosition.lon),
+          radius_km: "150",
+        });
+        const response = await fetch(`${apiBase}/navigation/nearby?${params.toString()}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error("Road data unavailable");
+        if (!active) return;
+        const layers = payload.layers ?? {};
+        const cameras = Array.isArray(layers.cameras) ? layers.cameras : [];
+        const inspections = Array.isArray(layers.inspection_stations) ? layers.inspection_stations : [];
+        const restAreas = Array.isArray(layers.truck_rest_areas) ? layers.truck_rest_areas : [];
+        const events = Array.isArray(layers.events) ? layers.events : [];
+        setRoadCounts({ cameras: cameras.length, inspections: inspections.length, restAreas: restAreas.length, events: events.length });
+        const road = layersRef.current?.road;
+        road?.removeAll();
+        const addRows = (rows: Array<Record<string, unknown>>, color: string, size: number) => {
+          rows.slice(0, 150).forEach((item) => {
+            const lat = Number(item.Latitude ?? item.latitude ?? item.lat);
+            const lon = Number(item.Longitude ?? item.longitude ?? item.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+            road?.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat, 70),
+              pixelSize: size,
+              color: Cesium.Color.fromCssColorString(color),
+              outlineColor: Cesium.Color.fromCssColorString("#07101d"),
+              outlineWidth: 2,
+            });
+          });
+        };
+        addRows(cameras, "#4fd1ff", 8);
+        addRows(inspections, "#ffd166", 11);
+        addRows(restAreas, "#7af8d6", 9);
+        addRows(events, "#ff6b7a", 10);
+        viewerRef.current?.scene.requestRender();
+        setRoadStatus("ready");
+      } catch {
+        if (active) setRoadStatus("error");
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [authConfigured, currentPosition, member]);
 
   const globeColStyle =
     fullscreen === "lab"
@@ -1201,6 +1256,15 @@ export default function App() {
                 {routeSummary.warning ? <em>{lang === "fr" ? "Profil camion consultatif : respectez toujours la signalisation." : routeSummary.warning}</em> : null}
               </div>
             ) : null}
+            <div className="gps-road-status">
+              <strong>
+                {roadStatus === "loading"
+                  ? (lang === "fr" ? "Chargement des services routiers…" : "Loading road services…")
+                  : (lang === "fr" ? "Services près de votre position" : "Services near your position")}
+              </strong>
+              <span>📷 {roadCounts.cameras} · ⚖ {roadCounts.inspections} · 🅿 {roadCounts.restAreas} · ⚠ {roadCounts.events}</span>
+              {roadStatus === "error" ? <em>{lang === "fr" ? "Source routière temporairement indisponible." : "Road source temporarily unavailable."}</em> : null}
+            </div>
 
             {gpsMode === "car" ? (
               <div className="gps-feature-grid">

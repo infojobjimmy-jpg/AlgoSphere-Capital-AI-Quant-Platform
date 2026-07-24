@@ -223,6 +223,10 @@ body,
 .gps-route-summary { display: grid; gap: 6px; padding: 14px; border: 1px solid rgba(122, 248, 214, .3); border-radius: 12px; background: rgba(9, 45, 48, .55); }
 .gps-route-summary span { color: var(--muted); font-size: 12px; }
 .gps-route-summary em { color: #ffd166; font-size: 11px; }
+.gps-road-status { display: grid; gap: 6px; margin-top: 12px; padding: 13px; border-radius: 12px; background: rgba(79, 209, 255, .08); }
+.gps-road-status strong { color: #dff9ff; font-size: 12px; }
+.gps-road-status span { color: #7af8d6; letter-spacing: .05em; }
+.gps-road-status em { color: #ffd166; font-size: 11px; }
 
 .member-panel {
   position: relative;
