@@ -166,6 +166,7 @@ body,
 }
 
 .subscription-kicker { color: #7af8d6; font-size: 11px; letter-spacing: .16em; font-weight: 800; }
+.subscription-campaign { width: 100%; max-height: 270px; object-fit: cover; object-position: center; margin-bottom: 24px; border-radius: 14px; border: 1px solid rgba(79, 209, 255, .25); }
 .subscription-panel h2 { margin: 10px 0 8px; font-size: clamp(26px, 4vw, 44px); }
 .subscription-lead { color: var(--muted); max-width: 720px; }
 .subscription-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
@@ -180,6 +181,7 @@ body,
 .subscription-cta:disabled { opacity: .55; cursor: not-allowed; }
 .subscription-enterprise { display: flex; gap: 18px; margin-top: 18px; padding: 18px; border-radius: 14px; background: rgba(79, 209, 255, .08); color: var(--muted); }
 .subscription-enterprise strong { color: #fff; }
+.subscription-enterprise-link { margin-left: auto; white-space: nowrap; color: #041018; background: #7af8d6; padding: 8px 12px; border-radius: 9px; text-decoration: none; font-weight: 800; }
 
 @media (max-width: 800px) {
   .subscription-grid { grid-template-columns: 1fr; }

@@ -26,9 +26,15 @@ const plans = [
 
 export default function SubscriptionPanel({ lang, onClose }: Props) {
   const checkoutUrls: Record<string, string | undefined> = {
-    explorer: import.meta.env.VITE_WHOP_EXPLORER_URL,
-    pro: import.meta.env.VITE_WHOP_PRO_URL,
-    business: import.meta.env.VITE_WHOP_BUSINESS_URL,
+    explorer:
+      import.meta.env.VITE_WHOP_EXPLORER_URL ||
+      "https://whop.com/algosphere-ia-lab/algosphere-explorer-founder",
+    pro:
+      import.meta.env.VITE_WHOP_PRO_URL ||
+      "https://whop.com/algosphere-ia-lab/algosphere-pro-founder",
+    business:
+      import.meta.env.VITE_WHOP_BUSINESS_URL ||
+      "https://whop.com/algosphere-ia-lab/algosphere-business-pilot",
   };
   const fr = lang === "fr";
 
@@ -44,6 +50,11 @@ export default function SubscriptionPanel({ lang, onClose }: Props) {
         <button className="subscription-close" type="button" onClick={onClose} aria-label={fr ? "Fermer" : "Close"}>
           ×
         </button>
+        <img
+          className="subscription-campaign"
+          src="/ads/algosphere-global-campaign.png"
+          alt={fr ? "AlgoSphere Global — intelligence géospatiale mondiale" : "AlgoSphere Global — global geospatial intelligence"}
+        />
         <div className="subscription-kicker">{fr ? "PRIX FONDATEURS · PLACES LIMITÉES" : "FOUNDING PRICES · LIMITED AVAILABILITY"}</div>
         <h2 id="subscription-title">{fr ? "Passez de l’observation à l’anticipation" : "Move from observation to anticipation"}</h2>
         <p className="subscription-lead">
@@ -76,7 +87,10 @@ export default function SubscriptionPanel({ lang, onClose }: Props) {
         </div>
         <div className="subscription-enterprise">
           <strong>{fr ? "Entreprise" : "Enterprise"}</strong>
-          <span>{fr ? "À partir de 499 $ CA/mois · accès personnalisé, API et déploiement d’équipe." : "From CA$499/month · custom access, API and team deployment."}</span>
+          <span>{fr ? "À partir de 1 500 $ US/mois · accès personnalisé, API et déploiement d’équipe. Vente sur devis." : "From US$1,500/month · custom access, API and team deployment. Contact for a quote."}</span>
+          <a className="subscription-enterprise-link" href="https://whop.com/algosphere-ia-lab/" target="_blank" rel="noreferrer">
+            {fr ? "Nous contacter" : "Contact us"}
+          </a>
         </div>
       </section>
     </div>
