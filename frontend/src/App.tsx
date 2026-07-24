@@ -35,6 +35,8 @@ type Snapshot = {
   decisions?: Array<Record<string, unknown>>;
 };
 
+type GpsMode = "car" | "truck";
+
 const apiBase = "/api";
 
 function wsUrl(): string {
@@ -63,7 +65,17 @@ function availabilityCount(value: number): React.ReactNode {
 export default function App() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [showGpsPanel, setShowGpsPanel] = useState(false);
+  const [gpsMode, setGpsMode] = useState<GpsMode>("car");
   const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "ready" | "denied">("idle");
+  const [truckProfile, setTruckProfile] = useState({
+    heightM: "4.15",
+    widthM: "2.60",
+    lengthM: "21.0",
+    weightKg: "36000",
+    axles: "5",
+    hazmat: false,
+  });
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const layersRef = useRef<{
@@ -633,12 +645,12 @@ export default function App() {
           <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
             {lang === "fr" ? "EN" : "FR"}
           </button>
-          <button type="button" className="gaios-gps-btn" onClick={locateUser} disabled={gpsStatus === "locating"}>
+          <button type="button" className="gaios-gps-btn" onClick={() => setShowGpsPanel(true)}>
             {gpsStatus === "locating"
               ? (lang === "fr" ? "Localisation…" : "Locating…")
               : gpsStatus === "ready"
-                ? (lang === "fr" ? "GPS actif" : "GPS active")
-                : (lang === "fr" ? "Ma position GPS" : "My GPS position")}
+                ? (lang === "fr" ? "GPS / Navigation" : "GPS / Navigation")
+                : (lang === "fr" ? "GPS / Navigation" : "GPS / Navigation")}
           </button>
           {gpsStatus === "denied" ? (
             <span className="gps-error">{lang === "fr" ? "Autorisez la localisation dans le navigateur." : "Allow location access in your browser."}</span>
@@ -1035,6 +1047,72 @@ export default function App() {
           </div>
         </div>
       </div>
+      {showGpsPanel ? (
+        <div className="gps-backdrop" role="presentation" onMouseDown={() => setShowGpsPanel(false)}>
+          <section
+            className="gps-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "fr" ? "Navigation GPS" : "GPS navigation"}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="subscription-close" onClick={() => setShowGpsPanel(false)} aria-label={lang === "fr" ? "Fermer" : "Close"}>×</button>
+            <div className="subscription-kicker">ALGOSPHERE NAV</div>
+            <h2>{lang === "fr" ? "GPS Canada–États-Unis" : "Canada–United States GPS"}</h2>
+            <p className="subscription-lead">
+              {lang === "fr"
+                ? "Navigation quotidienne avec un profil camion supplémentaire. Le globe et toutes les couches géospatiales restent disponibles."
+                : "Everyday navigation with an additional truck profile. The globe and all geospatial layers remain available."}
+            </p>
+
+            <div className="gps-mode-tabs">
+              <button type="button" className={gpsMode === "car" ? "is-active" : ""} onClick={() => setGpsMode("car")}>
+                {lang === "fr" ? "Auto / normal" : "Car / standard"}
+              </button>
+              <button type="button" className={gpsMode === "truck" ? "is-active" : ""} onClick={() => setGpsMode("truck")}>
+                {lang === "fr" ? "Camion" : "Truck"}
+              </button>
+            </div>
+
+            <div className="gps-actions">
+              <button type="button" className="subscription-cta" onClick={locateUser} disabled={gpsStatus === "locating"}>
+                {gpsStatus === "locating"
+                  ? (lang === "fr" ? "Localisation…" : "Locating…")
+                  : (lang === "fr" ? "Afficher ma position sur le globe" : "Show my position on the globe")}
+              </button>
+            </div>
+
+            {gpsMode === "car" ? (
+              <div className="gps-feature-grid">
+                <article><strong>{lang === "fr" ? "Navigation normale" : "Standard navigation"}</strong><span>{lang === "fr" ? "Auto, moto et déplacements personnels." : "Car, motorcycle and personal travel."}</span></article>
+                <article><strong>{lang === "fr" ? "Trafic et météo" : "Traffic and weather"}</strong><span>{lang === "fr" ? "Incidents, travaux, conditions et caméras autorisées." : "Incidents, roadwork, conditions and approved cameras."}</span></article>
+                <article><strong>{lang === "fr" ? "Favoris et alertes" : "Favorites and alerts"}</strong><span>{lang === "fr" ? "Enregistrement des lieux et avis importants." : "Saved places and important notices."}</span></article>
+              </div>
+            ) : (
+              <>
+                <div className="truck-profile-grid">
+                  <label>{lang === "fr" ? "Hauteur (m)" : "Height (m)"}<input value={truckProfile.heightM} onChange={(e) => setTruckProfile({ ...truckProfile, heightM: e.target.value })} inputMode="decimal" /></label>
+                  <label>{lang === "fr" ? "Largeur (m)" : "Width (m)"}<input value={truckProfile.widthM} onChange={(e) => setTruckProfile({ ...truckProfile, widthM: e.target.value })} inputMode="decimal" /></label>
+                  <label>{lang === "fr" ? "Longueur (m)" : "Length (m)"}<input value={truckProfile.lengthM} onChange={(e) => setTruckProfile({ ...truckProfile, lengthM: e.target.value })} inputMode="decimal" /></label>
+                  <label>{lang === "fr" ? "Poids total (kg)" : "Gross weight (kg)"}<input value={truckProfile.weightKg} onChange={(e) => setTruckProfile({ ...truckProfile, weightKg: e.target.value })} inputMode="numeric" /></label>
+                  <label>{lang === "fr" ? "Essieux" : "Axles"}<input value={truckProfile.axles} onChange={(e) => setTruckProfile({ ...truckProfile, axles: e.target.value })} inputMode="numeric" /></label>
+                  <label className="truck-check"><input type="checkbox" checked={truckProfile.hazmat} onChange={(e) => setTruckProfile({ ...truckProfile, hazmat: e.target.checked })} />{lang === "fr" ? "Matières dangereuses" : "Hazardous materials"}</label>
+                </div>
+                <div className="gps-feature-grid">
+                  <article><strong>{lang === "fr" ? "Gabarit et poids" : "Clearance and weight"}</strong><span>{lang === "fr" ? "Ponts bas, limites de charge et routes interdites." : "Low bridges, load limits and restricted roads."}</span></article>
+                  <article><strong>{lang === "fr" ? "Balances et frontières" : "Scales and borders"}</strong><span>{lang === "fr" ? "Postes d’inspection et attentes commerciales Canada–USA." : "Inspection stations and Canada–US commercial waits."}</span></article>
+                  <article><strong>{lang === "fr" ? "Services camion" : "Truck services"}</strong><span>{lang === "fr" ? "Stationnements, haltes, carburant et conditions routières." : "Parking, rest areas, fuel and road conditions."}</span></article>
+                </div>
+              </>
+            )}
+            <p className="gps-safety">
+              {lang === "fr"
+                ? "Déploiement progressif avec données publiques vérifiées. Les panneaux routiers et consignes officielles demeurent prioritaires."
+                : "Progressive rollout using verified public data. Posted road signs and official directions always take priority."}
+            </p>
+          </section>
+        </div>
+      ) : null}
       {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
     </div>
   );

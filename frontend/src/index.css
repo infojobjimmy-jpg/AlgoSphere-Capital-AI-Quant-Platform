@@ -141,6 +141,63 @@ body,
 .gaios-gps-btn:disabled { opacity: .65; }
 .gps-error { color: #ffd166; font-size: 11px; }
 
+.gps-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1, 5, 12, 0.84);
+  backdrop-filter: blur(14px);
+}
+
+.gps-panel {
+  position: relative;
+  width: min(860px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 32px;
+  border: 1px solid rgba(122, 248, 214, 0.42);
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 0%, rgba(26, 126, 131, 0.25), transparent 44%), #07101d;
+  box-shadow: 0 35px 120px rgba(0, 0, 0, 0.75);
+}
+
+.gps-panel h2 { margin: 10px 0 8px; font-size: clamp(25px, 4vw, 40px); }
+.gps-mode-tabs { display: flex; gap: 10px; margin: 24px 0 18px; }
+.gps-mode-tabs button {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid rgba(79, 209, 255, .3);
+  border-radius: 11px;
+  color: #dff9ff;
+  background: rgba(6, 12, 22, .82);
+  font-weight: 800;
+  cursor: pointer;
+}
+.gps-mode-tabs button.is-active { color: #041018; border-color: #7af8d6; background: linear-gradient(135deg, #7af8d6, #4fd1ff); }
+.gps-actions { margin-bottom: 18px; }
+.gps-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+.gps-feature-grid article { display: grid; gap: 7px; padding: 16px; border: 1px solid rgba(120, 200, 255, .18); border-radius: 13px; background: rgba(8, 17, 31, .76); }
+.gps-feature-grid article strong { color: #7af8d6; }
+.gps-feature-grid article span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.truck-profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.truck-profile-grid label { display: grid; gap: 6px; color: #b9cbe0; font-size: 11px; }
+.truck-profile-grid input[type="text"],
+.truck-profile-grid input:not([type]) { width: 100%; }
+.truck-profile-grid input {
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid rgba(79, 209, 255, .28);
+  border-radius: 9px;
+  color: #fff;
+  background: rgba(3, 9, 18, .88);
+}
+.truck-profile-grid .truck-check { display: flex; align-items: center; gap: 9px; padding-top: 21px; }
+.truck-profile-grid .truck-check input { width: auto; }
+.gps-safety { margin: 18px 0 0; color: #ffd166; font-size: 11px; line-height: 1.5; }
+
 .subscription-backdrop {
   position: fixed;
   inset: 0;
@@ -194,6 +251,8 @@ body,
 .subscription-enterprise-link { margin-left: auto; white-space: nowrap; color: #041018; background: #7af8d6; padding: 8px 12px; border-radius: 9px; text-decoration: none; font-weight: 800; }
 
 @media (max-width: 800px) {
+  .gps-feature-grid,
+  .truck-profile-grid { grid-template-columns: 1fr; }
   .subscription-grid { grid-template-columns: 1fr; }
   .subscription-card.is-featured { transform: none; }
   .subscription-enterprise { flex-direction: column; }
