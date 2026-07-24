@@ -10,6 +10,12 @@ services:
 
   frontend:
     ports: !override []
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
   edge:
     profiles: ["legacy-edge"]
