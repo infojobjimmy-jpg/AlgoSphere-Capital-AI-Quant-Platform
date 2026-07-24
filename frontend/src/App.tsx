@@ -70,7 +70,7 @@ function publicGeospatialText(value: unknown): string {
 }
 
 function isPublicGeospatialTrace(value: unknown): boolean {
-  return !/\b(trade|trading|broker|portfolio|market hub|paper execution)\b/i.test(String(value ?? ""));
+  return !/(?:\btrade\b|trade[_-]|\btrading\b|\bbroker\b|\bportfolio\b|\bmarket hub\b|\bpaper execution\b)/i.test(String(value ?? ""));
 }
 
 export default function App() {
