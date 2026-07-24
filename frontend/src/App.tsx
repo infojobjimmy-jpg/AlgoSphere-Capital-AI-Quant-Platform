@@ -81,6 +81,7 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [authConfigured, setAuthConfigured] = useState(false);
   const [member, setMember] = useState<Record<string, unknown> | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<{ kind: string; data: Record<string, unknown> } | null>(null);
   const [showGpsPanel, setShowGpsPanel] = useState(false);
   const [gpsMode, setGpsMode] = useState<GpsMode>("car");
   const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "ready" | "denied">("idle");
@@ -245,7 +246,16 @@ export default function App() {
     });
 
     viewerRef.current = viewer;
+    const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
+      const picked = viewer.scene.pick(movement.position) as { id?: unknown; primitive?: { id?: unknown } } | undefined;
+      const value = picked?.id ?? picked?.primitive?.id;
+      if (value && typeof value === "object" && "kind" in value && "data" in value) {
+        setSelectedFeature(value as { kind: string; data: Record<string, unknown> });
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     return () => {
+      clickHandler.destroy();
       layersRef.current = null;
       viewerRef.current = null;
       viewer.destroy();
@@ -438,6 +448,7 @@ export default function App() {
         const base = colorForAltKm(altKm);
         const tint = base.withAlpha(Cesium.Math.clamp(0.72 + 0.22 * imp, 0.55, 0.98));
         L.aircraft.add({
+          id: { kind: "aircraft", data: a },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(200, alt)),
           color: tint,
           pixelSize: 2.0 + imp * 7.0,
@@ -474,6 +485,7 @@ export default function App() {
         const lon = Number(s.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         L.ships.add({
+          id: { kind: "ship", data: s },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, 5),
           color: Cesium.Color.fromCssColorString("#7af8d6").withAlpha(0.9),
           pixelSize: 3,
@@ -492,6 +504,7 @@ export default function App() {
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         const h = Math.max(250_000, altKm * 1000);
         L.sats.add({
+          id: { kind: "satellite", data: s },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, h),
           color: Cesium.Color.fromCssColorString("#c7b6ff").withAlpha(0.95),
           pixelSize: 4,
@@ -506,6 +519,7 @@ export default function App() {
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         const t = typeof w.temperature_c === "number" ? w.temperature_c : undefined;
         L.wx.add({
+          id: { kind: "weather", data: w },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, 25_000),
           color: colorForTempC(t),
           pixelSize: 10,
@@ -520,6 +534,7 @@ export default function App() {
         const wind = Number(storm.wind_kn ?? 0);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         L.storms.add({
+          id: { kind: "storm", data: storm },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, 55_000),
           color: wind >= 64 ? Cesium.Color.fromCssColorString("#ff477e") : Cesium.Color.fromCssColorString("#ffb703"),
           pixelSize: 13 + Cesium.Math.clamp(wind / 20, 0, 8),
@@ -535,6 +550,7 @@ export default function App() {
         const lon = Number(c.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
         L.cams.add({
+          id: { kind: "camera", data: c },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, 1200),
           color: Cesium.Color.fromCssColorString("#ffd166").withAlpha(0.95),
           pixelSize: 7,
@@ -1365,6 +1381,33 @@ export default function App() {
             setShowSubscriptions(true);
           }}
         />
+      ) : null}
+      {selectedFeature ? (
+        <div className="feature-backdrop" role="presentation" onMouseDown={() => setSelectedFeature(null)}>
+          <section className="feature-card" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+            <button type="button" className="subscription-close" onClick={() => setSelectedFeature(null)}>×</button>
+            <div className="subscription-kicker">{selectedFeature.kind.toUpperCase()}</div>
+            <h2>{String(selectedFeature.data.label || selectedFeature.data.callsign || selectedFeature.data.registration || selectedFeature.data.id || (lang === "fr" ? "Information en direct" : "Live information"))}</h2>
+            {selectedFeature.kind === "camera" && selectedFeature.data.preview_url ? (
+              <img className="feature-camera-preview" src={String(selectedFeature.data.preview_url)} alt={String(selectedFeature.data.label || "Camera")} />
+            ) : null}
+            {selectedFeature.kind === "camera" && selectedFeature.data.stream_url ? (
+              <iframe className="feature-camera-frame" src={String(selectedFeature.data.stream_url)} title={String(selectedFeature.data.label || "Live camera")} allow="autoplay; fullscreen" loading="lazy" />
+            ) : null}
+            <dl className="feature-details">
+              {Object.entries(selectedFeature.data)
+                .filter(([key, value]) => value !== null && value !== undefined && !["preview_url", "stream_url", "info_url", "importance", "license"].includes(key))
+                .slice(0, 18)
+                .map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof value === "boolean" ? (value ? (lang === "fr" ? "Oui" : "Yes") : "No") : String(value)}</dd></div>)}
+            </dl>
+            {selectedFeature.kind === "camera" && selectedFeature.data.info_url ? (
+              <a className="subscription-cta feature-open-link" href={String(selectedFeature.data.info_url)} target="_blank" rel="noreferrer">
+                {lang === "fr" ? "Ouvrir la caméra chez le fournisseur" : "Open camera at provider"}
+              </a>
+            ) : null}
+            <p className="feature-source">{lang === "fr" ? "Source" : "Source"} : {String(selectedFeature.data.source || "AlgoSphere")}</p>
+          </section>
+        </div>
       ) : null}
       {showAccount && member ? <AccountPanel lang={lang} member={member} onClose={() => setShowAccount(false)} onLogout={() => { setMember(null); setShowAccount(false); }} /> : null}
       {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
