@@ -1,4 +1,23 @@
 services:
+  prometheus:
+    ports: !override []
+
+  grafana:
+    ports: !override []
+
+  api:
+    ports: !override []
+
+  frontend:
+    ports: !override []
+
+  edge:
+    profiles: ["legacy-edge"]
+    ports: !override []
+
+  trading:
+    profiles: ["trading"]
+
   caddy:
     image: caddy:2.10-alpine
     restart: always
