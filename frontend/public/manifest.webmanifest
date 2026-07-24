@@ -1,0 +1,18 @@
+{
+  "name": "AlgoSphere Global",
+  "short_name": "AlgoSphere",
+  "description": "Navigation et intelligence géospatiale mondiale.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101d",
+  "theme_color": "#07101d",
+  "lang": "fr-CA",
+  "icons": [
+    {
+      "src": "/algosphere-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

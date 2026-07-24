@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MemberAccessPanel from "./components/subscriptions/MemberAccessPanel";
 import SubscriptionPanel from "./components/subscriptions/SubscriptionPanel";
 
 type StrategySnap = {
@@ -65,6 +66,9 @@ function availabilityCount(value: number): React.ReactNode {
 export default function App() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [showMemberAccess, setShowMemberAccess] = useState(false);
+  const [authConfigured, setAuthConfigured] = useState(false);
+  const [member, setMember] = useState<Record<string, unknown> | null>(null);
   const [showGpsPanel, setShowGpsPanel] = useState(false);
   const [gpsMode, setGpsMode] = useState<GpsMode>("car");
   const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "ready" | "denied">("idle");
@@ -76,6 +80,10 @@ export default function App() {
     axles: "5",
     hazmat: false,
   });
+  const [currentPosition, setCurrentPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [destination, setDestination] = useState("");
+  const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number; destination: string; warning?: string } | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const layersRef = useRef<{
@@ -86,6 +94,7 @@ export default function App() {
     storms: Cesium.PointPrimitiveCollection;
     cams: Cesium.PointPrimitiveCollection;
     gps: Cesium.PointPrimitiveCollection;
+    route: Cesium.PolylineCollection;
     trails: Cesium.PolylineCollection;
     heat: Cesium.EntityCollection;
   } | null>(null);
@@ -130,6 +139,21 @@ export default function App() {
     }
     return liveSnap;
   }, [liveSnap, replayFrames, replayEnabled, replayIdx]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${apiBase}/auth/status`, { credentials: "same-origin" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!active) return;
+        setAuthConfigured(Boolean(payload.configured));
+        setMember(payload.authenticated ? (payload.member ?? {}) : null);
+      })
+      .catch(() => {
+        if (active) setAuthConfigured(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const counts = useMemo(() => {
     const layers = snap?.layers ?? {};
@@ -189,9 +213,10 @@ export default function App() {
     const storms = primitives.add(new Cesium.PointPrimitiveCollection());
     const cams = primitives.add(new Cesium.PointPrimitiveCollection());
     const gps = primitives.add(new Cesium.PointPrimitiveCollection());
+    const route = primitives.add(new Cesium.PolylineCollection());
     const trails = primitives.add(new Cesium.PolylineCollection());
 
-    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, trails, heat: viewer.entities };
+    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, route, trails, heat: viewer.entities };
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-15, 25, 18_000_000),
@@ -593,12 +618,78 @@ export default function App() {
           destination: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 450_000),
           duration: 1.8,
         });
+        setCurrentPosition({ lat: coords.latitude, lon: coords.longitude });
         setGpsStatus("ready");
       },
       () => setGpsStatus("denied"),
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
     );
   }, [lang]);
+
+  const calculateNavigation = useCallback(async () => {
+    if (authConfigured && !member) {
+      setShowMemberAccess(true);
+      return;
+    }
+    if (!currentPosition) {
+      locateUser();
+      setRouteStatus("error");
+      return;
+    }
+    if (destination.trim().length < 3) {
+      setRouteStatus("error");
+      return;
+    }
+    setRouteStatus("loading");
+    setRouteSummary(null);
+    try {
+      const searchResponse = await fetch(`${apiBase}/navigation/search?q=${encodeURIComponent(destination.trim())}`);
+      const searchPayload = await searchResponse.json();
+      const match = searchPayload.results?.[0];
+      if (!searchResponse.ok || !match) throw new Error("Destination not found");
+      const params = new URLSearchParams({
+        origin_lat: String(currentPosition.lat),
+        origin_lon: String(currentPosition.lon),
+        destination_lat: String(match.lat),
+        destination_lon: String(match.lon),
+        mode: gpsMode,
+      });
+      const routeResponse = await fetch(`${apiBase}/navigation/route?${params.toString()}`);
+      const routePayload = await routeResponse.json();
+      if (!routeResponse.ok || !routePayload.geometry?.coordinates) throw new Error("Route unavailable");
+      const points = routePayload.geometry.coordinates.map(([lon, lat]: [number, number]) =>
+        Cesium.Cartesian3.fromDegrees(lon, lat, 80),
+      );
+      const routeLayer = layersRef.current?.route;
+      routeLayer?.removeAll();
+      routeLayer?.add({
+        positions: points,
+        width: 5,
+        material: Cesium.Material.fromType("Color", { color: Cesium.Color.fromCssColorString("#7af8d6") }),
+      });
+      const viewer = viewerRef.current;
+      if (viewer && points.length) {
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(
+            (currentPosition.lon + Number(match.lon)) / 2,
+            (currentPosition.lat + Number(match.lat)) / 2,
+            Math.max(250_000, Number(routePayload.distance_m || 0) * 1.7),
+          ),
+          duration: 1.8,
+        });
+        viewer.scene.requestRender();
+      }
+      setRouteSummary({
+        distanceKm: Number(routePayload.distance_m || 0) / 1000,
+        durationMin: Number(routePayload.duration_s || 0) / 60,
+        destination: String(match.label || destination),
+        warning: routePayload.warning || undefined,
+      });
+      setRouteStatus("ready");
+    } catch {
+      setRouteStatus("error");
+    }
+  }, [authConfigured, currentPosition, destination, gpsMode, locateUser, member]);
 
   const globeColStyle =
     fullscreen === "lab"
@@ -642,6 +733,9 @@ export default function App() {
           <button type="button" className="gaios-subscribe-btn" onClick={() => setShowSubscriptions(true)}>
             {lang === "fr" ? "Abonnements" : "Pricing"}
           </button>
+          <button type="button" className="gaios-member-btn" onClick={() => setShowMemberAccess(true)}>
+            {member ? (lang === "fr" ? "Membre actif" : "Active member") : (lang === "fr" ? "Accès membre" : "Member access")}
+          </button>
           <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
             {lang === "fr" ? "EN" : "FR"}
           </button>
@@ -670,7 +764,7 @@ export default function App() {
             {fullscreen === "lab" ? (lang === "fr" ? "Quitter le plein écran" : "Exit fullscreen") : (lang === "fr" ? "Intelligence plein écran" : "Intelligence fullscreen")}
           </button>
         </div>
-        <div className="gaios-panel gaios-panel--dock">
+        <div className={`gaios-panel gaios-panel--dock ${authConfigured && !member ? "is-premium-locked" : ""}`}>
           <div className="gaios-title">
             <h1>ALGOSPHERE GLOBAL</h1>
             <span>{lang === "fr" ? "Intelligence géospatiale unifiée · données mondiales vérifiées" : "Unified geospatial intelligence · verified global data"}</span>
@@ -1082,6 +1176,32 @@ export default function App() {
               </button>
             </div>
 
+            <label className="gps-destination">
+              {lang === "fr" ? "Destination (Canada ou États-Unis)" : "Destination (Canada or United States)"}
+              <input
+                value={destination}
+                onChange={(event) => setDestination(event.target.value)}
+                placeholder={lang === "fr" ? "Adresse, ville ou lieu" : "Address, city or place"}
+              />
+            </label>
+            <button type="button" className="subscription-cta gps-route-btn" onClick={calculateNavigation} disabled={routeStatus === "loading"}>
+              {routeStatus === "loading"
+                ? (lang === "fr" ? "Calcul de l’itinéraire…" : "Calculating route…")
+                : (lang === "fr" ? "Calculer et afficher l’itinéraire" : "Calculate and show route")}
+            </button>
+            {routeStatus === "error" ? (
+              <p className="member-error">
+                {lang === "fr" ? "Activez votre position et vérifiez la destination." : "Enable your position and check the destination."}
+              </p>
+            ) : null}
+            {routeSummary ? (
+              <div className="gps-route-summary">
+                <strong>{routeSummary.distanceKm.toFixed(1)} km · {Math.round(routeSummary.durationMin)} min</strong>
+                <span>{routeSummary.destination}</span>
+                {routeSummary.warning ? <em>{lang === "fr" ? "Profil camion consultatif : respectez toujours la signalisation." : routeSummary.warning}</em> : null}
+              </div>
+            ) : null}
+
             {gpsMode === "car" ? (
               <div className="gps-feature-grid">
                 <article><strong>{lang === "fr" ? "Navigation normale" : "Standard navigation"}</strong><span>{lang === "fr" ? "Auto, moto et déplacements personnels." : "Car, motorcycle and personal travel."}</span></article>
@@ -1112,6 +1232,18 @@ export default function App() {
             </p>
           </section>
         </div>
+      ) : null}
+      {showMemberAccess ? (
+        <MemberAccessPanel
+          lang={lang}
+          configured={authConfigured}
+          onAuthenticated={setMember}
+          onClose={() => setShowMemberAccess(false)}
+          onSubscribe={() => {
+            setShowMemberAccess(false);
+            setShowSubscriptions(true);
+          }}
+        />
       ) : null}
       {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
     </div>

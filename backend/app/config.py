@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     aisstream_api_key: str | None = None
     windy_webcams_api_key: str | None = None
+    whop_api_key: str | None = None
+    whop_allowed_product_ids: str = "prod_bHg2Q9qH34ABM,prod_tGJzw7gVSEPgi,prod_uqA3jSjF5t3fy"
+    auth_session_secret: str | None = None
+    auth_session_hours: int = 168
+    navigation_osrm_base_url: str = "https://router.project-osrm.org"
+    navigation_http_timeout_sec: float = 15.0
     tavily_api_key: str | None = None
     serpapi_key: str | None = None
     camera_probe_interval_sec: float = 90.0

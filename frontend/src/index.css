@@ -115,6 +115,7 @@ body,
 .gaios-brand span { color: var(--accent); }
 
 .gaios-subscribe-btn,
+.gaios-member-btn,
 .gaios-lang-btn,
 .gaios-gps-btn {
   border: 1px solid rgba(122, 248, 214, 0.55);
@@ -130,6 +131,16 @@ body,
   min-width: 44px;
   color: #dff9ff;
   background: rgba(6, 12, 22, 0.82);
+}
+
+.gaios-member-btn {
+  border: 1px solid rgba(192, 132, 252, .55);
+  border-radius: 10px;
+  padding: 8px 13px;
+  color: #efe3ff;
+  background: rgba(35, 16, 59, .72);
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .gaios-gps-btn {
@@ -197,6 +208,35 @@ body,
 .truck-profile-grid .truck-check { display: flex; align-items: center; gap: 9px; padding-top: 21px; }
 .truck-profile-grid .truck-check input { width: auto; }
 .gps-safety { margin: 18px 0 0; color: #ffd166; font-size: 11px; line-height: 1.5; }
+.gps-destination { display: grid; gap: 7px; margin: 16px 0 10px; color: #b9cbe0; font-size: 12px; }
+.gps-destination input,
+.member-license-label input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(79, 209, 255, .3);
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(3, 9, 18, .9);
+}
+.gps-route-btn { margin-bottom: 12px; }
+.gps-route-summary { display: grid; gap: 6px; padding: 14px; border: 1px solid rgba(122, 248, 214, .3); border-radius: 12px; background: rgba(9, 45, 48, .55); }
+.gps-route-summary span { color: var(--muted); font-size: 12px; }
+.gps-route-summary em { color: #ffd166; font-size: 11px; }
+
+.member-panel {
+  position: relative;
+  width: min(560px, 100%);
+  padding: 32px;
+  border: 1px solid rgba(192, 132, 252, .48);
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 0%, rgba(83, 39, 130, .32), transparent 44%), #07101d;
+  box-shadow: 0 35px 120px rgba(0, 0, 0, .78);
+}
+.member-panel h2 { margin: 10px 0 8px; font-size: 34px; }
+.member-license-label { display: grid; gap: 7px; margin: 22px 0 12px; color: #b9cbe0; font-size: 12px; }
+.member-error { color: #ff9eaa; font-size: 12px; }
+.member-subscribe-link { display: block; margin: 18px auto 0; border: 0; color: #7af8d6; background: transparent; cursor: pointer; text-decoration: underline; }
 
 .subscription-backdrop {
   position: fixed;

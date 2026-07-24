@@ -8,19 +8,19 @@ type Props = {
 const plans = [
   {
     id: "explorer",
-    fr: { name: "Explorer", price: "9,99 $ CA", features: ["Données mondiales en direct", "Filtres et favoris", "Historique 24 heures"] },
-    en: { name: "Explorer", price: "CA$9.99", features: ["Live global data", "Filters and favourites", "24-hour history"] },
+    fr: { name: "Explorer — Fondateur", price: "39 $ US", features: ["Données mondiales en direct", "Filtres et favoris", "Historique 24 heures"] },
+    en: { name: "Explorer — Founder", price: "US$39", features: ["Live global data", "Filters and favourites", "24-hour history"] },
   },
   {
     id: "pro",
     featured: true,
-    fr: { name: "Pro", price: "24,99 $ CA", features: ["Alertes personnalisées", "Replay et zones surveillées", "Analyses d’intelligence"] },
-    en: { name: "Pro", price: "CA$24.99", features: ["Custom alerts", "Replay and watch zones", "Intelligence analysis"] },
+    fr: { name: "Pro — Fondateur", price: "99 $ US", features: ["Alertes personnalisées", "Replay et zones surveillées", "Analyses d’intelligence"] },
+    en: { name: "Pro — Founder", price: "US$99", features: ["Custom alerts", "Replay and watch zones", "Intelligence analysis"] },
   },
   {
     id: "business",
-    fr: { name: "Business", price: "99 $ CA", features: ["Accès pour une équipe", "Rapports et exportation", "Assistance prioritaire"] },
-    en: { name: "Business", price: "CA$99", features: ["Team access", "Reports and exports", "Priority support"] },
+    fr: { name: "Business — Pilote", price: "399 $ US", features: ["Accès pour une équipe", "Rapports et exportation", "Assistance prioritaire"] },
+    en: { name: "Business — Pilot", price: "US$399", features: ["Team access", "Reports and exports", "Priority support"] },
   },
 ];
 
