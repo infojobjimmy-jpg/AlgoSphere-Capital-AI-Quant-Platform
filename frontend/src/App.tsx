@@ -141,7 +141,7 @@ export default function App() {
   } | null>(null);
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
-  const [leftPct, setLeftPct] = useState(40);
+  const [leftPct, setLeftPct] = useState(66);
   const [fullscreen, setFullscreen] = useState<null | "globe" | "lab">(null);
   const dragRef = useRef<{ startX: number; startPct: number; width: number } | null>(null);
 
@@ -869,7 +869,7 @@ export default function App() {
           <div className="row">
             <label className="toggle">
               <input type="checkbox" checked={showAircraft} onChange={(e) => setShowAircraft(e.target.checked)} />
-              Aircraft
+              {lang === "fr" ? "Avions" : "Aircraft"}
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showSats} onChange={(e) => setShowSats(e.target.checked)} />
@@ -877,11 +877,11 @@ export default function App() {
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showShips} onChange={(e) => setShowShips(e.target.checked)} />
-              Ships
+              {lang === "fr" ? "Navires" : "Ships"}
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showWeather} onChange={(e) => setShowWeather(e.target.checked)} />
-              Weather
+              {lang === "fr" ? "Météo" : "Weather"}
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showStorms} onChange={(e) => setShowStorms(e.target.checked)} />
@@ -889,12 +889,36 @@ export default function App() {
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showCams} onChange={(e) => setShowCams(e.target.checked)} />
-              Cameras
+              {lang === "fr" ? "Caméras" : "Cameras"}
             </label>
             <label className="toggle">
               <input type="checkbox" checked={showHeat} onChange={(e) => setShowHeat(e.target.checked)} />
-              Heat clusters
+              {lang === "fr" ? "Zones d’activité" : "Activity zones"}
             </label>
+          </div>
+
+          <div className="customer-home">
+            <button type="button" className="customer-action" onClick={() => setShowGpsPanel(true)}>
+              <span className="customer-action-icon">⌖</span>
+              <span>
+                <strong>{lang === "fr" ? "Navigation GPS" : "GPS navigation"}</strong>
+                <small>{lang === "fr" ? "Auto, camion, routes et services" : "Car, truck, routes and services"}</small>
+              </span>
+            </button>
+            <button type="button" className="customer-action" onClick={() => setFullscreen("globe")}>
+              <span className="customer-action-icon">◎</span>
+              <span>
+                <strong>{lang === "fr" ? "Explorer le monde" : "Explore the world"}</strong>
+                <small>{lang === "fr" ? "Globe plein écran et couches en direct" : "Fullscreen globe and live layers"}</small>
+              </span>
+            </button>
+            <button type="button" className="customer-action" onClick={() => member ? setShowMemberAccess(true) : setShowSubscriptions(true)}>
+              <span className="customer-action-icon">★</span>
+              <span>
+                <strong>{member ? (lang === "fr" ? "Mon abonnement" : "My membership") : (lang === "fr" ? "Débloquer AlgoSphere" : "Unlock AlgoSphere")}</strong>
+                <small>{lang === "fr" ? "Favoris, alertes et historique" : "Favorites, alerts and history"}</small>
+              </span>
+            </button>
           </div>
 
           <div className="alerts">

@@ -228,6 +228,60 @@ body,
 .gps-road-status span { color: #7af8d6; letter-spacing: .05em; }
 .gps-road-status em { color: #ffd166; font-size: 11px; }
 
+.customer-home {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.customer-action {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(79, 209, 255, .22);
+  border-radius: 13px;
+  color: #eaf8ff;
+  background: linear-gradient(135deg, rgba(14, 39, 61, .92), rgba(7, 18, 34, .92));
+  text-align: left;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.customer-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(122, 248, 214, .62);
+  background: linear-gradient(135deg, rgba(18, 62, 74, .94), rgba(8, 25, 43, .94));
+}
+
+.customer-action-icon {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  color: #07101d;
+  background: linear-gradient(135deg, #7af8d6, #4fd1ff);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.customer-action span:last-child { display: grid; gap: 4px; }
+.customer-action strong { font-size: 13px; }
+.customer-action small { color: var(--muted); font-size: 11px; }
+
+/* Internal operational diagnostics continue running server-side but are not
+   part of the customer-facing product. */
+.gaios-panel--dock > .intelblock,
+.gaios-panel--dock > .replay,
+.gaios-panel--dock > .correlations,
+.gaios-panel--dock > .footer {
+  display: none;
+}
+
 .member-panel {
   position: relative;
   width: min(560px, 100%);
