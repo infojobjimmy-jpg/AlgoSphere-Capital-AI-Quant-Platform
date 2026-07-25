@@ -21,6 +21,21 @@ function sessionId(): string {
   return value;
 }
 
+function campaignProperties(): Record<string, string> {
+  const params = new URLSearchParams(window.location.search);
+  const current = ["utm_source", "utm_medium", "utm_campaign", "utm_content"].reduce<Record<string, string>>((result, key) => {
+    const value = params.get(key);
+    if (value) result[key] = value.slice(0, 120);
+    return result;
+  }, {});
+  if (Object.keys(current).length) sessionStorage.setItem("algosphere_campaign", JSON.stringify(current));
+  try {
+    return JSON.parse(sessionStorage.getItem("algosphere_campaign") || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 export function trackEvent(event: string, options: { plan?: string; properties?: Record<string, string | number | boolean | null> } = {}): void {
   if (analyticsConsent() !== "accepted") return;
   void fetch("/api/analytics/event", {
@@ -33,7 +48,7 @@ export function trackEvent(event: string, options: { plan?: string; properties?:
       path: window.location.pathname,
       plan: options.plan,
       session_id: sessionId(),
-      properties: options.properties ?? {},
+      properties: { ...campaignProperties(), ...(options.properties ?? {}) },
     }),
   }).catch(() => undefined);
 }

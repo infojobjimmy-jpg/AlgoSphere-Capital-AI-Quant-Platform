@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
 
 from app.db.session import get_session
+from app.services.whop_auth import current_member
 
 router = APIRouter()
 ALLOWED_EVENTS = {"page_view", "app_open", "checkout_click", "member_login", "gps_open", "community_open"}
@@ -49,3 +50,48 @@ async def record_event(body: AnalyticsEvent, request: Request, session: AsyncSes
     )
     await session.commit()
     return {"accepted": True}
+
+
+@router.get("/summary")
+async def analytics_summary(request: Request, session: AsyncSession = Depends(get_session)) -> dict:
+    member = current_member(request)
+    if not member or member.get("role") != "owner":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Owner access required")
+    totals = (
+        await session.execute(
+            text(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS events_7d,
+                  COUNT(DISTINCT session_id) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS visitors_7d,
+                  COUNT(*) FILTER (WHERE event_name='checkout_click' AND created_at >= NOW() - INTERVAL '7 days') AS checkout_clicks_7d,
+                  COUNT(*) FILTER (WHERE event_name='member_login' AND created_at >= NOW() - INTERVAL '7 days') AS logins_7d,
+                  COUNT(DISTINCT session_id) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS visitors_30d
+                FROM analytics_events
+                """
+            )
+        )
+    ).mappings().one()
+    campaigns = (
+        await session.execute(
+            text(
+                """
+                SELECT
+                  COALESCE(properties->>'utm_campaign', 'direct') AS campaign,
+                  COALESCE(properties->>'utm_source', 'direct') AS source,
+                  COUNT(DISTINCT session_id) AS visitors,
+                  COUNT(*) FILTER (WHERE event_name='checkout_click') AS checkout_clicks
+                FROM analytics_events
+                WHERE created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY 1, 2
+                ORDER BY checkout_clicks DESC, visitors DESC
+                LIMIT 12
+                """
+            )
+        )
+    ).mappings().all()
+    result = {key: int(value or 0) for key, value in totals.items()}
+    visitors = result["visitors_7d"]
+    result["checkout_rate_7d"] = round(result["checkout_clicks_7d"] * 100 / visitors, 1) if visitors else 0.0
+    return {"totals": result, "campaigns": [dict(row) for row in campaigns]}

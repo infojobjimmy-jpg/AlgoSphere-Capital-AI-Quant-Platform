@@ -8,6 +8,10 @@ type Props = {
 };
 
 type Preferences = { favorites: Array<{ name: string }>; alerts: Array<{ name: string; enabled: boolean }> };
+type AnalyticsSummary = {
+  totals: { visitors_7d: number; checkout_clicks_7d: number; checkout_rate_7d: number; logins_7d: number; visitors_30d: number };
+  campaigns: Array<{ campaign: string; source: string; visitors: number; checkout_clicks: number }>;
+};
 
 export default function AccountPanel({ lang, member, onClose, onLogout }: Props) {
   const fr = lang === "fr";
@@ -18,6 +22,7 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
   const [currentOwnerCode, setCurrentOwnerCode] = useState("");
   const [newOwnerCode, setNewOwnerCode] = useState("");
   const [ownerMessage, setOwnerMessage] = useState("");
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
 
   useEffect(() => {
     fetch("/api/account/preferences", { credentials: "same-origin" })
@@ -28,6 +33,14 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
       }))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (member.role !== "owner") return;
+    fetch("/api/analytics/summary", { credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((payload) => setAnalytics(payload as AnalyticsSummary))
+      .catch(() => undefined);
+  }, [member.role]);
 
   const save = async (next: Preferences) => {
     setPreferences(next);
@@ -81,6 +94,21 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
         <div className="account-alerts">{preferences.alerts.map((item, index) => <label key={`${item.name}-${index}`}><input type="checkbox" checked={item.enabled} onChange={(e) => { const alerts = [...preferences.alerts]; alerts[index] = { ...item, enabled: e.target.checked }; void save({ ...preferences, alerts }); }} />{item.name}<button onClick={() => void save({ ...preferences, alerts: preferences.alerts.filter((_, i) => i !== index) })}>×</button></label>)}</div>
         {saved ? <p className="account-saved">{fr ? "Enregistré." : "Saved."}</p> : null}
         {member.role === "owner" ? (
+          <>
+          <section className="owner-analytics">
+            <h3>{fr ? "Campagne pilote" : "Pilot campaign"}</h3>
+            <div className="owner-metrics">
+              <span><small>{fr ? "Visiteurs · 7 j" : "Visitors · 7d"}</small><strong>{analytics?.totals.visitors_7d ?? "—"}</strong></span>
+              <span><small>{fr ? "Clics vers Whop" : "Whop clicks"}</small><strong>{analytics?.totals.checkout_clicks_7d ?? "—"}</strong></span>
+              <span><small>{fr ? "Taux de clic" : "Click rate"}</small><strong>{analytics ? `${analytics.totals.checkout_rate_7d}%` : "—"}</strong></span>
+              <span><small>{fr ? "Connexions" : "Logins"}</small><strong>{analytics?.totals.logins_7d ?? "—"}</strong></span>
+            </div>
+            {analytics?.campaigns.length ? (
+              <div className="campaign-list">{analytics.campaigns.map((row) => (
+                <span key={`${row.source}-${row.campaign}`}><b>{row.campaign}</b><small>{row.source} · {row.visitors} {fr ? "visites" : "visits"} · {row.checkout_clicks} clics</small></span>
+              ))}</div>
+            ) : <p>{fr ? "Les résultats apparaîtront ici dès les premières visites consenties." : "Results will appear here after the first consented visits."}</p>}
+          </section>
           <section className="owner-security">
             <h3>{fr ? "Sécurité propriétaire" : "Owner security"}</h3>
             <p>{fr ? "Utilisez au moins 16 caractères uniques. Après le changement, l’ancien code ne permettra plus de nouvelle connexion." : "Use at least 16 unique characters. After the change, the old code can no longer start a new session."}</p>
@@ -89,6 +117,7 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
             <button className="subscription-cta" type="button" disabled={currentOwnerCode.length < 12 || newOwnerCode.length < 16} onClick={() => void changeOwnerCode()}>{fr ? "Changer le code" : "Change code"}</button>
             {ownerMessage ? <p className="account-saved">{ownerMessage}</p> : null}
           </section>
+          </>
         ) : null}
         <div className="account-actions">
           <a className="subscription-cta" href={String(member.manage_url || "https://whop.com/hub")} target="_blank" rel="noreferrer">{fr ? "Gérer sur Whop" : "Manage on Whop"}</a>
