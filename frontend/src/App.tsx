@@ -102,6 +102,7 @@ export default function App() {
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [destination, setDestination] = useState("");
   const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [routeError, setRouteError] = useState<string>("");
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number; destination: string; warning?: string } | null>(null);
   const [roadStatus, setRoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [roadCounts, setRoadCounts] = useState({ cameras: 0, inspections: 0, restAreas: 0, events: 0 });
@@ -700,20 +701,24 @@ export default function App() {
     }
     if (!currentPosition) {
       locateUser();
+      setRouteError(lang === "fr" ? "Activez d'abord votre position GPS." : "Enable your GPS position first.");
       setRouteStatus("error");
       return;
     }
     if (destination.trim().length < 3) {
+      setRouteError(lang === "fr" ? "Saisissez au moins 3 caractères pour la destination." : "Enter at least 3 characters for the destination.");
       setRouteStatus("error");
       return;
     }
     setRouteStatus("loading");
     setRouteSummary(null);
+    setRouteError("");
     try {
       const searchResponse = await fetch(`${apiBase}/navigation/search?q=${encodeURIComponent(destination.trim())}`);
+      if (!searchResponse.ok) throw new Error(lang === "fr" ? "Service de recherche indisponible." : "Address search unavailable.");
       const searchPayload = await searchResponse.json();
       const match = searchPayload.results?.[0];
-      if (!searchResponse.ok || !match) throw new Error("Destination not found");
+      if (!match) throw new Error(lang === "fr" ? `Destination introuvable : « ${destination.trim()} ». Essayez une ville ou une adresse plus précise.` : `Destination not found: "${destination.trim()}". Try a city name or a more specific address.`);
       const params = new URLSearchParams({
         origin_lat: String(currentPosition.lat),
         origin_lon: String(currentPosition.lon),
@@ -722,20 +727,30 @@ export default function App() {
         mode: gpsMode,
       });
       const routeResponse = await fetch(`${apiBase}/navigation/route?${params.toString()}`);
+      if (!routeResponse.ok) {
+        const detail = await routeResponse.json().then((d: { detail?: string }) => d.detail).catch(() => "");
+        throw new Error(lang === "fr" ? `Calcul impossible : ${detail || "service d'itinéraire temporairement indisponible."}` : `Route unavailable: ${detail || "routing service temporarily unavailable."}`);
+      }
       const routePayload = await routeResponse.json();
-      if (!routeResponse.ok || !routePayload.geometry?.coordinates) throw new Error("Route unavailable");
-      const points = routePayload.geometry.coordinates.map(([lon, lat]: [number, number]) =>
-        Cesium.Cartesian3.fromDegrees(lon, lat, 80),
-      );
+      const coords: [number, number][] = routePayload.geometry?.coordinates ?? [];
+      if (!coords.length) throw new Error(lang === "fr" ? "Aucun itinéraire trouvé entre ces deux points." : "No route found between these two points.");
+      const points = coords
+        .filter(([lon, lat]) => typeof lon === "number" && typeof lat === "number" && isFinite(lon) && isFinite(lat))
+        .map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 80));
+      if (!points.length) throw new Error(lang === "fr" ? "Coordonnées d'itinéraire invalides." : "Invalid route coordinates.");
       const routeLayer = layersRef.current?.route;
-      routeLayer?.removeAll();
-      routeLayer?.add({
+      if (!routeLayer) throw new Error(lang === "fr" ? "Globe non initialisé — rechargez la page." : "Globe not initialised — reload the page.");
+      routeLayer.removeAll();
+      routeLayer.add({
         positions: points,
-        width: 5,
-        material: Cesium.Material.fromType("Color", { color: Cesium.Color.fromCssColorString("#7af8d6") }),
+        width: 6,
+        material: Cesium.Material.fromType(Cesium.Material.ColorType, {
+          color: new Cesium.Color(0.478, 0.973, 0.839, 1.0),
+        }),
       });
       const viewer = viewerRef.current;
-      if (viewer && points.length) {
+      if (viewer) {
+        viewer.scene.requestRender();
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(
             (currentPosition.lon + Number(match.lon)) / 2,
@@ -744,7 +759,6 @@ export default function App() {
           ),
           duration: 1.8,
         });
-        viewer.scene.requestRender();
       }
       setRouteSummary({
         distanceKm: Number(routePayload.distance_m || 0) / 1000,
@@ -753,10 +767,13 @@ export default function App() {
         warning: routePayload.warning || undefined,
       });
       setRouteStatus("ready");
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Navigation]", msg, err);
+      setRouteError(msg);
       setRouteStatus("error");
     }
-  }, [authConfigured, currentPosition, destination, gpsMode, locateUser, member]);
+  }, [authConfigured, currentPosition, destination, gpsMode, lang, locateUser, member]);
 
   useEffect(() => {
     if (!currentPosition || (authConfigured && !member)) return;
@@ -1339,6 +1356,7 @@ export default function App() {
               <input
                 value={destination}
                 onChange={(event) => setDestination(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter" && routeStatus !== "loading") calculateNavigation(); }}
                 placeholder={lang === "fr" ? "Adresse, ville ou lieu" : "Address, city or place"}
               />
             </label>
@@ -1349,7 +1367,7 @@ export default function App() {
             </button>
             {routeStatus === "error" ? (
               <p className="member-error">
-                {lang === "fr" ? "Activez votre position et vérifiez la destination." : "Enable your position and check the destination."}
+                {routeError || (lang === "fr" ? "Activez votre position et vérifiez la destination." : "Enable your position and check the destination.")}
               </p>
             ) : null}
             {routeSummary ? (
