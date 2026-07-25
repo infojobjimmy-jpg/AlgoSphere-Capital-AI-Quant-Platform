@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     whop_allowed_product_ids: str = "prod_bHg2Q9qH34ABM,prod_tGJzw7gVSEPgi,prod_uqA3jSjF5t3fy"
     auth_session_secret: str | None = None
     auth_session_hours: int = 168
+    owner_access_code: str | None = None
+    owner_email: str = "infojobjimmy@gmail.com"
+    owner_login_max_attempts: int = 5
+    owner_login_window_seconds: int = 900
     navigation_osrm_base_url: str = "https://router.project-osrm.org"
     navigation_http_timeout_sec: float = 15.0
     tavily_api_key: str | None = None

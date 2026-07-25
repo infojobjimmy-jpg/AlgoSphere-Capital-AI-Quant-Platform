@@ -1,0 +1,9 @@
+[Unit]
+Description=AlgoSphere PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/algosphere/scripts/backup_postgres.sh
+User=root

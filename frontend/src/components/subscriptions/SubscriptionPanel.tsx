@@ -92,6 +92,13 @@ export default function SubscriptionPanel({ lang, onClose }: Props) {
             {fr ? "Nous contacter" : "Contact us"}
           </a>
         </div>
+        <p className="checkout-legal">
+          {fr ? "En démarrant un essai ou un abonnement, vous reconnaissez avoir consulté nos " : "By starting a trial or membership, you acknowledge our "}
+          <a href={fr ? "/conditions" : "/terms"} target="_blank">{fr ? "Conditions" : "Terms"}</a>,{" "}
+          <a href={fr ? "/confidentialite" : "/privacy"} target="_blank">{fr ? "Politique de confidentialité" : "Privacy policy"}</a>{" "}
+          {fr ? "et notre " : "and "}
+          <a href={fr ? "/remboursement" : "/refunds"} target="_blank">{fr ? "Politique de remboursement" : "Refund policy"}</a>.
+        </p>
       </section>
     </div>
   );

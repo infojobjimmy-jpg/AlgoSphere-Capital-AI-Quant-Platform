@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly AlgoSphere PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+Unit=algosphere-backup.service
+
+[Install]
+WantedBy=timers.target

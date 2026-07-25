@@ -15,6 +15,9 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
   const [favorite, setFavorite] = useState("");
   const [alertName, setAlertName] = useState("");
   const [saved, setSaved] = useState(false);
+  const [currentOwnerCode, setCurrentOwnerCode] = useState("");
+  const [newOwnerCode, setNewOwnerCode] = useState("");
+  const [ownerMessage, setOwnerMessage] = useState("");
 
   useEffect(() => {
     fetch("/api/account/preferences", { credentials: "same-origin" })
@@ -40,6 +43,25 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
     onLogout();
   };
 
+  const changeOwnerCode = async () => {
+    setOwnerMessage("");
+    const response = await fetch("/api/auth/owner/change-code", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_code: currentOwnerCode, new_code: newOwnerCode }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setOwnerMessage(String(payload.detail || (fr ? "Changement impossible." : "Unable to change code.")));
+      return;
+    }
+    setOwnerMessage(fr ? "Code changé. Reconnectez-vous avec le nouveau code." : "Code changed. Sign in again with the new code.");
+    setCurrentOwnerCode("");
+    setNewOwnerCode("");
+    onLogout();
+  };
+
   return (
     <div className="gps-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="member-panel account-panel" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
@@ -58,6 +80,16 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
         <div className="account-add"><input value={alertName} onChange={(e) => setAlertName(e.target.value)} placeholder={fr ? "Ex. cargo près de Montréal" : "E.g. cargo near Montreal"} /><button onClick={() => { if (alertName.trim()) { void save({ ...preferences, alerts: [...preferences.alerts, { name: alertName.trim(), enabled: true }] }); setAlertName(""); } }}>+</button></div>
         <div className="account-alerts">{preferences.alerts.map((item, index) => <label key={`${item.name}-${index}`}><input type="checkbox" checked={item.enabled} onChange={(e) => { const alerts = [...preferences.alerts]; alerts[index] = { ...item, enabled: e.target.checked }; void save({ ...preferences, alerts }); }} />{item.name}<button onClick={() => void save({ ...preferences, alerts: preferences.alerts.filter((_, i) => i !== index) })}>×</button></label>)}</div>
         {saved ? <p className="account-saved">{fr ? "Enregistré." : "Saved."}</p> : null}
+        {member.role === "owner" ? (
+          <section className="owner-security">
+            <h3>{fr ? "Sécurité propriétaire" : "Owner security"}</h3>
+            <p>{fr ? "Utilisez au moins 16 caractères uniques. Après le changement, l’ancien code ne permettra plus de nouvelle connexion." : "Use at least 16 unique characters. After the change, the old code can no longer start a new session."}</p>
+            <input type="password" autoComplete="current-password" value={currentOwnerCode} onChange={(e) => setCurrentOwnerCode(e.target.value)} placeholder={fr ? "Code actuel" : "Current code"} />
+            <input type="password" autoComplete="new-password" value={newOwnerCode} onChange={(e) => setNewOwnerCode(e.target.value)} placeholder={fr ? "Nouveau code" : "New code"} />
+            <button className="subscription-cta" type="button" disabled={currentOwnerCode.length < 12 || newOwnerCode.length < 16} onClick={() => void changeOwnerCode()}>{fr ? "Changer le code" : "Change code"}</button>
+            {ownerMessage ? <p className="account-saved">{ownerMessage}</p> : null}
+          </section>
+        ) : null}
         <div className="account-actions">
           <a className="subscription-cta" href={String(member.manage_url || "https://whop.com/hub")} target="_blank" rel="noreferrer">{fr ? "Gérer sur Whop" : "Manage on Whop"}</a>
           <button className="member-subscribe-link" onClick={() => void logout()}>{fr ? "Se déconnecter" : "Sign out"}</button>

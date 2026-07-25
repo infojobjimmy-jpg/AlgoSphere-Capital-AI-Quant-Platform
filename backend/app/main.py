@@ -13,7 +13,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
 from app.db.session import ensure_database
-from app.routers import account, alerts, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router
+from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social
 from app.services.whop_auth import configured as auth_configured, read_session
 from app.routers import navigation, self_code, system, trading
 from app.market_hub_bus import market_hub_broadcaster
@@ -74,7 +74,11 @@ app.add_middleware(
 @app.middleware("http")
 async def protect_mutating_routes(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
-        public_mutations = {"/auth/license", "/auth/logout", "/account/preferences"}
+        public_mutations = {
+            "/auth/license", "/auth/owner", "/auth/owner/change-code", "/auth/logout", "/account/preferences",
+            "/analytics/event",
+            "/social/profile", "/social/presence", "/social/connect", "/social/messages",
+        }
         if request.url.path in public_mutations:
             return await call_next(request)
         expected = settings.api_admin_key
@@ -92,7 +96,9 @@ Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(account.router, prefix="/account", tags=["account"])
+app.include_router(social.router, prefix="/social", tags=["social"])
 app.include_router(navigation.router, prefix="/navigation", tags=["navigation"])
 app.include_router(system.router, prefix="/system", tags=["system"])
 app.include_router(layers.router, prefix="/layers", tags=["layers"])

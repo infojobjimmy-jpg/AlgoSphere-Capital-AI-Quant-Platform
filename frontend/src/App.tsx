@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import MemberAccessPanel from "./components/subscriptions/MemberAccessPanel";
 import SubscriptionPanel from "./components/subscriptions/SubscriptionPanel";
 import AccountPanel from "./components/subscriptions/AccountPanel";
+import SocialPanel from "./components/social/SocialPanel";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -60,8 +61,8 @@ function colorForTempC(t: number | undefined): Cesium.Color {
   return Cesium.Color.fromHsl(0.58 - 0.35 * u, 0.9, 0.55, 0.95);
 }
 
-function availabilityCount(value: number): React.ReactNode {
-  return value > 0 ? value : <span className="source-unavailable">Unavailable</span>;
+function availabilityCount(value: number, lang: "fr" | "en"): React.ReactNode {
+  return value > 0 ? value : <span className="source-unavailable">{lang === "fr" ? "Indisponible" : "Unavailable"}</span>;
 }
 
 function publicGeospatialText(value: unknown): string {
@@ -79,7 +80,9 @@ export default function App() {
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showMemberAccess, setShowMemberAccess] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showSocial, setShowSocial] = useState(false);
   const [authConfigured, setAuthConfigured] = useState(false);
+  const [ownerAccessConfigured, setOwnerAccessConfigured] = useState(false);
   const [member, setMember] = useState<Record<string, unknown> | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<{ kind: string; data: Record<string, unknown> } | null>(null);
   const [showGpsPanel, setShowGpsPanel] = useState(false);
@@ -169,6 +172,7 @@ export default function App() {
       .then((payload) => {
         if (!active) return;
         setAuthConfigured(Boolean(payload.configured));
+        setOwnerAccessConfigured(Boolean(payload.owner_access_configured));
         setMember(payload.authenticated ? (payload.member ?? {}) : null);
       })
       .catch(() => {
@@ -189,6 +193,16 @@ export default function App() {
       updated: String(snap?.meta?.updated_at ?? "—"),
     };
   }, [snap]);
+
+  const unavailableSources = useMemo(() => {
+    if (!snap) return [] as string[];
+    return [
+      [counts.aircraft, lang === "fr" ? "avions" : "aircraft"],
+      [counts.ships, lang === "fr" ? "navires" : "vessels"],
+      [counts.weather, lang === "fr" ? "météo" : "weather"],
+      [counts.cameras, lang === "fr" ? "caméras" : "cameras"],
+    ].filter(([count]) => Number(count) === 0).map(([, label]) => String(label));
+  }, [counts, lang, snap]);
 
   const strategy = useMemo(() => (snap?.meta?.strategy ?? {}) as StrategySnap, [snap]);
 
@@ -831,6 +845,9 @@ export default function App() {
           <button type="button" className="gaios-member-btn" onClick={() => member ? setShowAccount(true) : setShowMemberAccess(true)}>
             {member ? (lang === "fr" ? "Mon compte" : "My account") : (lang === "fr" ? "Accès membre" : "Member access")}
           </button>
+          <button type="button" className="gaios-social-btn" onClick={() => member ? setShowSocial(true) : setShowMemberAccess(true)}>
+            {lang === "fr" ? "Communauté" : "Community"}
+          </button>
           <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
             {lang === "fr" ? "EN" : "FR"}
           </button>
@@ -866,21 +883,27 @@ export default function App() {
           </div>
 
           <div className="grid">
+            {unavailableSources.length ? (
+              <div className="source-status-banner" role="status">
+                <strong>{lang === "fr" ? "Certaines sources sont temporairement indisponibles" : "Some sources are temporarily unavailable"}</strong>
+                <span>{unavailableSources.join(", ")}. {lang === "fr" ? "Les autres couches continuent de fonctionner; aucune donnée simulée ne remplace la source." : "Other layers remain available; simulated data never replaces the source."}</span>
+              </div>
+            ) : null}
             <div className="stat">
               <label>{lang === "fr" ? "Avions" : "Aircraft"}</label>
-              <strong>{availabilityCount(counts.aircraft)}</strong>
+              <strong>{availabilityCount(counts.aircraft, lang)}</strong>
             </div>
             <div className="stat">
               <label>Satellites</label>
-              <strong>{availabilityCount(counts.satellites)}</strong>
+              <strong>{availabilityCount(counts.satellites, lang)}</strong>
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Navires" : "Ships"}</label>
-              <strong>{availabilityCount(counts.ships)}</strong>
+              <strong>{availabilityCount(counts.ships, lang)}</strong>
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Météo" : "Weather"}</label>
-              <strong>{availabilityCount(counts.weather)}</strong>
+              <strong>{availabilityCount(counts.weather, lang)}</strong>
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Tempêtes actives" : "Active storms"}</label>
@@ -888,7 +911,7 @@ export default function App() {
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Caméras" : "Cameras"}</label>
-              <strong>{availabilityCount(counts.cameras)}</strong>
+              <strong>{availabilityCount(counts.cameras, lang)}</strong>
             </div>
             <div className="stat">
               <label>Updated</label>
@@ -1374,6 +1397,7 @@ export default function App() {
         <MemberAccessPanel
           lang={lang}
           configured={authConfigured}
+          ownerAccessConfigured={ownerAccessConfigured}
           onAuthenticated={setMember}
           onClose={() => setShowMemberAccess(false)}
           onSubscribe={() => {
@@ -1410,6 +1434,26 @@ export default function App() {
         </div>
       ) : null}
       {showAccount && member ? <AccountPanel lang={lang} member={member} onClose={() => setShowAccount(false)} onLogout={() => { setMember(null); setShowAccount(false); }} /> : null}
+      {showSocial && member ? <SocialPanel
+        lang={lang}
+        currentPosition={currentPosition}
+        onLocate={locateUser}
+        onFocusPerson={(lat, lon) => {
+          layersRef.current?.gps.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 180),
+            pixelSize: 17,
+            color: Cesium.Color.fromCssColorString("#66f2d5"),
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 3,
+          });
+          viewerRef.current?.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1800000),
+            duration: 1.5,
+          });
+          setShowSocial(false);
+        }}
+        onClose={() => setShowSocial(false)}
+      /> : null}
       {showSubscriptions ? <SubscriptionPanel lang={lang} onClose={() => setShowSubscriptions(false)} /> : null}
     </div>
   );
