@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Language } from "../../i18n";
 
 type Props = {
-  lang: "fr" | "en";
+  lang: Language;
   member: Record<string, unknown>;
   onClose: () => void;
   onLogout: () => void;

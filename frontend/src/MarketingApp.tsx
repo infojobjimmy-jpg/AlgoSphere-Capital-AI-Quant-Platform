@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import "./marketing.css";
+import LanguageSelect from "./components/LanguageSelect";
+import { Language, savedLanguage, useInterfaceTranslation } from "./i18n";
 
-type Lang = "fr" | "en";
+type Lang = Language;
 
 const whop = {
   explorer: "https://whop.com/algosphere-ia-lab/algosphere-explorer-founder",
@@ -83,12 +85,12 @@ const legalCopy = {
 } as const;
 
 function LegalPage({ page, lang, setLang }: { page: keyof typeof legalCopy; lang: Lang; setLang: (lang: Lang) => void }) {
-  const copy = legalCopy[page][lang];
+  const copy = legalCopy[page][lang === "fr" ? "fr" : "en"];
   return (
     <main className="mkt legal-page">
       <header className="mkt-nav">
         <a className="mkt-brand" href="/"><span>ALGOSPHERE</span> GLOBAL</a>
-        <button className="mkt-lang" onClick={() => setLang(lang === "fr" ? "en" : "fr")}>{lang === "fr" ? "EN" : "FR"}</button>
+        <LanguageSelect className="mkt-lang" value={lang} onChange={setLang} />
       </header>
       <article className="legal-card">
         <a className="legal-back" href="/">← {lang === "fr" ? "Retour à l’accueil" : "Back to home"}</a>
@@ -103,7 +105,8 @@ function LegalPage({ page, lang, setLang }: { page: keyof typeof legalCopy; lang
 }
 
 export default function MarketingApp() {
-  const [lang, setLang] = useState<Lang>(() => localStorage.getItem("algosphere_lang") === "en" ? "en" : "fr");
+  const [lang, setLang] = useState<Lang>(savedLanguage);
+  useInterfaceTranslation(lang);
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const legalPage = path === "/confidentialite" || path === "/privacy" ? "privacy"
     : path === "/conditions" || path === "/terms" ? "terms"
@@ -112,7 +115,7 @@ export default function MarketingApp() {
 
   useEffect(() => {
     localStorage.setItem("algosphere_lang", lang);
-    document.documentElement.lang = lang === "fr" ? "fr-CA" : "en";
+    document.documentElement.lang = lang === "fr" ? "fr-CA" : lang;
     window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
   }, [lang]);
   if (legalPage) return <LegalPage page={legalPage} lang={lang} setLang={setLang} />;
@@ -126,7 +129,7 @@ export default function MarketingApp() {
           <a href="#capacites">{fr ? "Capacités" : "Capabilities"}</a>
           <a href="#abonnements">{fr ? "Abonnements" : "Pricing"}</a>
           <a className="mkt-nav-app" href="/app">{fr ? "Ouvrir le globe" : "Open globe"}</a>
-          <button className="mkt-lang" onClick={() => setLang(fr ? "en" : "fr")}>{fr ? "EN" : "FR"}</button>
+          <LanguageSelect className="mkt-lang" value={lang} onChange={setLang} />
         </nav>
       </header>
 

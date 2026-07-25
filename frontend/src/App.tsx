@@ -5,6 +5,8 @@ import MemberAccessPanel from "./components/subscriptions/MemberAccessPanel";
 import SubscriptionPanel from "./components/subscriptions/SubscriptionPanel";
 import AccountPanel from "./components/subscriptions/AccountPanel";
 import SocialPanel from "./components/social/SocialPanel";
+import LanguageSelect from "./components/LanguageSelect";
+import { Language, savedLanguage, useInterfaceTranslation } from "./i18n";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -61,7 +63,7 @@ function colorForTempC(t: number | undefined): Cesium.Color {
   return Cesium.Color.fromHsl(0.58 - 0.35 * u, 0.9, 0.55, 0.95);
 }
 
-function availabilityCount(value: number, lang: "fr" | "en"): React.ReactNode {
+function availabilityCount(value: number, lang: Language): React.ReactNode {
   return value > 0 ? value : <span className="source-unavailable">{lang === "fr" ? "Indisponible" : "Unavailable"}</span>;
 }
 
@@ -76,7 +78,8 @@ function isPublicGeospatialTrace(value: unknown): boolean {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<"fr" | "en">(() => localStorage.getItem("algosphere_lang") === "en" ? "en" : "fr");
+  const [lang, setLang] = useState<Language>(savedLanguage);
+  useInterfaceTranslation(lang);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showMemberAccess, setShowMemberAccess] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -183,7 +186,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem("algosphere_lang", lang);
-    document.documentElement.lang = lang === "fr" ? "fr-CA" : "en";
+    document.documentElement.lang = lang === "fr" ? "fr-CA" : lang;
     window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
   }, [lang]);
 
@@ -854,9 +857,7 @@ export default function App() {
           <button type="button" className="gaios-social-btn" onClick={() => member ? setShowSocial(true) : setShowMemberAccess(true)}>
             {lang === "fr" ? "Communauté" : "Community"}
           </button>
-          <button type="button" className="gaios-lang-btn" onClick={() => setLang((value) => value === "fr" ? "en" : "fr")}>
-            {lang === "fr" ? "EN" : "FR"}
-          </button>
+          <LanguageSelect className="gaios-lang-btn" value={lang} onChange={setLang} />
           <button type="button" className="gaios-gps-btn" onClick={() => setShowGpsPanel(true)}>
             {gpsStatus === "locating"
               ? (lang === "fr" ? "Localisation…" : "Locating…")

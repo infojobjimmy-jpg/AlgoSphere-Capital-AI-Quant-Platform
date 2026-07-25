@@ -1,4 +1,5 @@
-type Lang = "fr" | "en";
+import { Language } from "../../i18n";
+type Lang = Language;
 
 type Props = {
   lang: Lang;
@@ -64,7 +65,7 @@ export default function SubscriptionPanel({ lang, onClose }: Props) {
         </p>
         <div className="subscription-grid">
           {plans.map((plan) => {
-            const copy = plan[lang];
+            const copy = plan[lang === "fr" ? "fr" : "en"];
             const checkoutUrl = checkoutUrls[plan.id];
             return (
               <article key={plan.id} className={`subscription-card ${plan.featured ? "is-featured" : ""}`}>

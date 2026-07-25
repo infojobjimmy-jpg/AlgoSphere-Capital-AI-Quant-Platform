@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { trackEvent } from "../../analytics";
+import { Language } from "../../i18n";
 
 type Props = {
-  lang: "fr" | "en";
+  lang: Language;
   configured: boolean;
   ownerAccessConfigured: boolean;
   onAuthenticated: (member: Record<string, unknown>) => void;

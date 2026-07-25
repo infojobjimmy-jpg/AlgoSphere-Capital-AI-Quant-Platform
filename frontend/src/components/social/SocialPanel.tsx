@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Language } from "../../i18n";
 
 type Row = Record<string, unknown>;
 type Props = {
-  lang: "fr" | "en";
+  lang: Language;
   currentPosition: { lat: number; lon: number } | null;
   onLocate: () => void;
   onFocusPerson: (lat: number, lon: number) => void;
