@@ -736,30 +736,29 @@ export default function App() {
       if (!coords.length) throw new Error(lang === "fr" ? "Aucun itinéraire trouvé entre ces deux points." : "No route found between these two points.");
       const points = coords
         .filter(([lon, lat]) => typeof lon === "number" && typeof lat === "number" && isFinite(lon) && isFinite(lat))
-        .map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 80));
+        .map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 100));
       if (!points.length) throw new Error(lang === "fr" ? "Coordonnées d'itinéraire invalides." : "Invalid route coordinates.");
+      const viewer = viewerRef.current;
+      if (!viewer) throw new Error(lang === "fr" ? "Globe non initialisé — rechargez la page." : "Globe not initialised — reload the page.");
+      if (layersRef.current && !layersRef.current.route) {
+        layersRef.current.route = viewer.scene.primitives.add(new Cesium.PolylineCollection()) as Cesium.PolylineCollection;
+      }
       const routeLayer = layersRef.current?.route;
       if (!routeLayer) throw new Error(lang === "fr" ? "Globe non initialisé — rechargez la page." : "Globe not initialised — reload the page.");
       routeLayer.removeAll();
       routeLayer.add({
         positions: points,
         width: 6,
-        material: Cesium.Material.fromType(Cesium.Material.ColorType, {
+        material: Cesium.Material.fromType("Color", {
           color: new Cesium.Color(0.478, 0.973, 0.839, 1.0),
         }),
       });
-      const viewer = viewerRef.current;
-      if (viewer) {
-        viewer.scene.requestRender();
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(
-            (currentPosition.lon + Number(match.lon)) / 2,
-            (currentPosition.lat + Number(match.lat)) / 2,
-            Math.max(250_000, Number(routePayload.distance_m || 0) * 1.7),
-          ),
-          duration: 1.8,
-        });
-      }
+      const sphere = Cesium.BoundingSphere.fromPoints(points);
+      viewer.scene.requestRender();
+      viewer.camera.flyToBoundingSphere(sphere, {
+        duration: 1.8,
+        complete: () => { viewer.scene.requestRender(); },
+      });
       setRouteSummary({
         distanceKm: Number(routePayload.distance_m || 0) / 1000,
         durationMin: Number(routePayload.duration_s || 0) / 60,
