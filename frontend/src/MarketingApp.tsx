@@ -110,7 +110,11 @@ export default function MarketingApp() {
     : path === "/remboursement" || path === "/refunds" ? "refunds"
     : null;
 
-  useEffect(() => { localStorage.setItem("algosphere_lang", lang); document.documentElement.lang = lang === "fr" ? "fr-CA" : "en"; }, [lang]);
+  useEffect(() => {
+    localStorage.setItem("algosphere_lang", lang);
+    document.documentElement.lang = lang === "fr" ? "fr-CA" : "en";
+    window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
+  }, [lang]);
   if (legalPage) return <LegalPage page={legalPage} lang={lang} setLang={setLang} />;
 
   const fr = lang === "fr";
@@ -148,7 +152,7 @@ export default function MarketingApp() {
           ["6", fr ? "couches mondiales" : "global layers"],
           ["3D", fr ? "globe interactif" : "interactive globe"],
           ["24/7", fr ? "veille continue" : "continuous awareness"],
-          ["7 jours", fr ? "d’essai admissible" : "eligible trial"],
+          [fr ? "7 jours" : "7 days", fr ? "d’essai admissible" : "eligible trial"],
         ].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
       </section>
 
@@ -190,9 +194,9 @@ export default function MarketingApp() {
       <section id="abonnements" className="mkt-section mkt-pricing">
         <div className="mkt-center"><p className="mkt-eyebrow">{fr ? "PRIX FONDATEURS" : "FOUNDER PRICING"}</p><h2>{fr ? "Commencez par voir. Passez à l’anticipation." : "Start by seeing. Move toward anticipation."}</h2><p>{fr ? "Essai de 7 jours sur les offres admissibles. Prix en dollars US." : "7-day trial on eligible plans. Prices in US dollars."}</p></div>
         <div className="mkt-price-grid">
-          <article><span>EXPLORER</span><h3>39 $<small>/mois</small></h3><ul><li>{fr ? "Données mondiales en direct" : "Live global data"}</li><li>{fr ? "Filtres et favoris" : "Filters and favorites"}</li><li>{fr ? "Historique 24 heures" : "24-hour history"}</li></ul><a href={whop.explorer} target="_blank" rel="noreferrer">{fr ? "Commencer l’essai" : "Start trial"}</a></article>
-          <article className="featured"><em>{fr ? "LE PLUS POPULAIRE" : "MOST POPULAR"}</em><span>PRO</span><h3>99 $<small>/mois</small></h3><ul><li>{fr ? "Alertes personnalisées" : "Custom alerts"}</li><li>{fr ? "Replay et zones surveillées" : "Replay and watch zones"}</li><li>{fr ? "Analyses d’intelligence" : "Intelligence analysis"}</li></ul><a href={whop.pro} target="_blank" rel="noreferrer">{fr ? "Commencer l’essai" : "Start trial"}</a></article>
-          <article><span>BUSINESS</span><h3>399 $<small>/mois</small></h3><ul><li>{fr ? "Accès pour une équipe" : "Team access"}</li><li>{fr ? "Rapports et exportation" : "Reports and exports"}</li><li>{fr ? "Assistance prioritaire" : "Priority support"}</li></ul><a href={whop.business} target="_blank" rel="noreferrer">{fr ? "Démarrer le pilote" : "Start pilot"}</a></article>
+          <article><span>EXPLORER</span><h3>39 $<small>/{fr ? "mois" : "month"}</small></h3><ul><li>{fr ? "Données mondiales en direct" : "Live global data"}</li><li>{fr ? "Filtres et favoris" : "Filters and favorites"}</li><li>{fr ? "Historique 24 heures" : "24-hour history"}</li></ul><a href={whop.explorer} target="_blank" rel="noreferrer">{fr ? "Commencer l’essai" : "Start trial"}</a></article>
+          <article className="featured"><em>{fr ? "LE PLUS POPULAIRE" : "MOST POPULAR"}</em><span>PRO</span><h3>99 $<small>/{fr ? "mois" : "month"}</small></h3><ul><li>{fr ? "Alertes personnalisées" : "Custom alerts"}</li><li>{fr ? "Replay et zones surveillées" : "Replay and watch zones"}</li><li>{fr ? "Analyses d’intelligence" : "Intelligence analysis"}</li></ul><a href={whop.pro} target="_blank" rel="noreferrer">{fr ? "Commencer l’essai" : "Start trial"}</a></article>
+          <article><span>BUSINESS</span><h3>399 $<small>/{fr ? "mois" : "month"}</small></h3><ul><li>{fr ? "Accès pour une équipe" : "Team access"}</li><li>{fr ? "Rapports et exportation" : "Reports and exports"}</li><li>{fr ? "Assistance prioritaire" : "Priority support"}</li></ul><a href={whop.business} target="_blank" rel="noreferrer">{fr ? "Démarrer le pilote" : "Start pilot"}</a></article>
         </div>
         <p className="mkt-checkout-legal">
           {fr ? "Avant l’achat, consultez nos " : "Before purchasing, review our "}
@@ -213,7 +217,7 @@ export default function MarketingApp() {
       <footer className="mkt-footer">
         <a className="mkt-brand" href="/"><span>ALGOSPHERE</span> GLOBAL</a>
         <p>{fr ? "Intelligence géospatiale mondiale. Les données externes peuvent être retardées ou temporairement indisponibles." : "Global geospatial intelligence. External data may be delayed or temporarily unavailable."}</p>
-        <nav><a href="/confidentialite">{fr ? "Confidentialité" : "Privacy"}</a><a href="/conditions">{fr ? "Conditions" : "Terms"}</a><a href="/remboursement">{fr ? "Remboursement" : "Refunds"}</a><a href="https://whop.com/algosphere-ia-lab/" target="_blank" rel="noreferrer">Contact</a></nav>
+        <nav><a href={fr ? "/confidentialite" : "/privacy"}>{fr ? "Confidentialité" : "Privacy"}</a><a href={fr ? "/conditions" : "/terms"}>{fr ? "Conditions" : "Terms"}</a><a href={fr ? "/remboursement" : "/refunds"}>{fr ? "Remboursement" : "Refunds"}</a><a href="https://whop.com/algosphere-ia-lab/" target="_blank" rel="noreferrer">Contact</a></nav>
         <small>© 2026 AlgoSphere Global</small>
       </footer>
     </main>

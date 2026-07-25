@@ -76,7 +76,7 @@ function isPublicGeospatialTrace(value: unknown): boolean {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<"fr" | "en">("fr");
+  const [lang, setLang] = useState<"fr" | "en">(() => localStorage.getItem("algosphere_lang") === "en" ? "en" : "fr");
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showMemberAccess, setShowMemberAccess] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -180,6 +180,12 @@ export default function App() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("algosphere_lang", lang);
+    document.documentElement.lang = lang === "fr" ? "fr-CA" : "en";
+    window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
+  }, [lang]);
 
   const counts = useMemo(() => {
     const layers = snap?.layers ?? {};
@@ -914,7 +920,7 @@ export default function App() {
               <strong>{availabilityCount(counts.cameras, lang)}</strong>
             </div>
             <div className="stat">
-              <label>Updated</label>
+              <label>{lang === "fr" ? "Mise à jour" : "Updated"}</label>
               <strong style={{ fontSize: 12, color: "var(--muted)" }}>{counts.updated}</strong>
             </div>
           </div>
@@ -995,7 +1001,7 @@ export default function App() {
               );
             })}
             {(snap?.alerts ?? []).length === 0 ? (
-              <div style={{ color: "var(--muted)", fontSize: 12 }}>No active anomaly alerts.</div>
+              <div style={{ color: "var(--muted)", fontSize: 12 }}>{lang === "fr" ? "Aucune alerte d’anomalie active." : "No active anomaly alerts."}</div>
             ) : null}
           </div>
 
@@ -1422,7 +1428,7 @@ export default function App() {
               {Object.entries(selectedFeature.data)
                 .filter(([key, value]) => value !== null && value !== undefined && !["preview_url", "stream_url", "info_url", "importance", "license"].includes(key))
                 .slice(0, 18)
-                .map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof value === "boolean" ? (value ? (lang === "fr" ? "Oui" : "Yes") : "No") : String(value)}</dd></div>)}
+                .map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof value === "boolean" ? (value ? (lang === "fr" ? "Oui" : "Yes") : (lang === "fr" ? "Non" : "No")) : String(value)}</dd></div>)}
             </dl>
             {selectedFeature.kind === "camera" && selectedFeature.data.info_url ? (
               <a className="subscription-cta feature-open-link" href={String(selectedFeature.data.info_url)} target="_blank" rel="noreferrer">

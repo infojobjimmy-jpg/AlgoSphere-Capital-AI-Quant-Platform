@@ -3,7 +3,14 @@ import { analyticsConsent, setAnalyticsConsent, trackEvent } from "../analytics"
 
 export default function ConsentBanner() {
   const [choice, setChoice] = useState(analyticsConsent());
-  const fr = localStorage.getItem("algosphere_lang") !== "en";
+  const [lang, setLang] = useState<"fr" | "en">(() => localStorage.getItem("algosphere_lang") === "en" ? "en" : "fr");
+  const fr = lang === "fr";
+
+  useEffect(() => {
+    const update = (event: Event) => setLang((event as CustomEvent<"fr" | "en">).detail);
+    window.addEventListener("algosphere-language-change", update);
+    return () => window.removeEventListener("algosphere-language-change", update);
+  }, []);
 
   useEffect(() => {
     if (choice === "accepted") trackEvent(window.location.pathname === "/app" ? "app_open" : "page_view");

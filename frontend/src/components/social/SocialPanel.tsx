@@ -11,6 +11,11 @@ type Props = {
 
 export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPerson, onClose }: Props) {
   const fr = lang === "fr";
+  const relationshipLabel = (value: unknown) => {
+    const key = String(value || "");
+    if (!fr) return key;
+    return ({ friends: "amis", family: "famille", dating: "rencontres", community: "communauté" } as Record<string, string>)[key] || key;
+  };
   const [data, setData] = useState<Record<string, any> | null>(null);
   const [tab, setTab] = useState<"people" | "chat" | "profile">("people");
   const [message, setMessage] = useState("");
@@ -57,7 +62,10 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
     });
   };
   const profile = data?.profile ?? {};
-  const badge = Number(profile.points ?? 0) >= 150 ? "Navigateur" : Number(profile.points ?? 0) >= 50 ? "Connecteur" : Number(profile.points ?? 0) >= 10 ? "Explorateur" : "Nouveau";
+  const badge = Number(profile.points ?? 0) >= 150 ? (fr ? "Navigateur" : "Navigator")
+    : Number(profile.points ?? 0) >= 50 ? (fr ? "Connecteur" : "Connector")
+    : Number(profile.points ?? 0) >= 10 ? (fr ? "Explorateur" : "Explorer")
+    : (fr ? "Nouveau" : "New");
 
   return (
     <div className="social-backdrop" role="presentation" onMouseDown={onClose}>
@@ -76,9 +84,9 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
           <div className="social-invite"><div><small>{fr ? "VOTRE CODE PRIVÉ" : "YOUR PRIVATE CODE"}</small><strong>{profile.invite_code}</strong><p>{fr ? "Envoyez ce code à votre famille, vos amis ou votre partenaire." : "Send this code to family, friends or your partner."}</p></div><form onSubmit={connect}><input value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase())} placeholder={fr ? "Entrer un code" : "Enter a code"} /><button>{fr ? "Ajouter" : "Add"}</button></form></div>
           <div className="social-location"><div><strong>📍 {fr ? "Présence sur le globe" : "Globe presence"}</strong><p>{fr ? "Partage précis réservé à vos contacts." : "Precise sharing limited to your contacts."}</p></div><button onClick={() => void shareLocation(true)}>{currentPosition ? (fr ? "Partager maintenant" : "Share now") : (fr ? "Activer le GPS" : "Enable GPS")}</button><button className="quiet" onClick={() => void shareLocation(false)}>{fr ? "Arrêter" : "Stop"}</button></div>
           <h3>{fr ? "Mes proches" : "My people"}</h3>
-          <div className="social-cards">{(data.connections as Row[]).map((person) => <article key={String(person.member_id)}><b>{String(person.avatar)}</b><div><strong>{String(person.display_name)}</strong><span>{String(person.label)} · {String(person.city || person.country || "")}</span>{person.lat ? <button className="social-focus" onClick={() => onFocusPerson(Number(person.lat), Number(person.lon))}>◎ {fr ? "Voir sur le globe" : "View on globe"}</button> : null}</div></article>)}{!data.connections.length ? <p className="social-empty">{fr ? "Ajoutez un proche avec son code privé." : "Add someone using their private code."}</p> : null}</div>
+          <div className="social-cards">{(data.connections as Row[]).map((person) => <article key={String(person.member_id)}><b>{String(person.avatar)}</b><div><strong>{String(person.display_name)}</strong><span>{relationshipLabel(person.label)} · {String(person.city || person.country || "")}</span>{person.lat ? <button className="social-focus" onClick={() => onFocusPerson(Number(person.lat), Number(person.lon))}>◎ {fr ? "Voir sur le globe" : "View on globe"}</button> : null}</div></article>)}{!data.connections.length ? <p className="social-empty">{fr ? "Ajoutez un proche avec son code privé." : "Add someone using their private code."}</p> : null}</div>
           <h3>{fr ? "Découvrir la communauté" : "Discover the community"}</h3>
-          <div className="social-cards">{(data.discovery as Row[]).map((person) => <article key={String(person.member_id)}><b>{String(person.avatar)}</b><div><strong>{String(person.display_name)}</strong><span>{String(person.city || "")} {String(person.country || "")}</span><small>{String(person.intent)} · {String(person.points)} pts</small></div></article>)}</div>
+          <div className="social-cards">{(data.discovery as Row[]).map((person) => <article key={String(person.member_id)}><b>{String(person.avatar)}</b><div><strong>{String(person.display_name)}</strong><span>{String(person.city || "")} {String(person.country || "")}</span><small>{relationshipLabel(person.intent)} · {String(person.points)} pts</small></div></article>)}</div>
         </div> : null}
         {data && tab === "chat" ? <div className="social-chat"><div className="social-messages">{(data.messages as Row[]).map((item) => <article key={String(item.id)}><b>{String(item.avatar)}</b><div><strong>{String(item.display_name)} <small>{String(item.points)} pts</small></strong><p>{String(item.content)}</p></div></article>)}</div><form onSubmit={send}><input value={message} maxLength={500} onChange={(e) => setMessage(e.target.value)} placeholder={fr ? "Écrire au salon mondial…" : "Message the global room…"} /><button>{fr ? "Envoyer" : "Send"}</button></form></div> : null}
         {data && tab === "profile" ? <form className="social-profile" onSubmit={saveProfile}>
