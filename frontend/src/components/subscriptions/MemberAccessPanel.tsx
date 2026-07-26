@@ -80,13 +80,17 @@ export default function MemberAccessPanel({ lang, configured, ownerAccessConfigu
     }
   };
 
-  const toggleOwnerMode = () => {
-    setOwnerMode((value) => !value);
+  const toggleOwnerMode = async () => {
+    const nextOwnerMode = !ownerMode;
+    setOwnerMode(nextOwnerMode);
     setOwnerPermanentMode(false);
     setOtpSent(false);
     setEmailHint("");
     setLicenseKey("");
     setError("");
+    if (nextOwnerMode) {
+      await requestOwnerCode();
+    }
   };
 
   const ownerOtpReady = /^\d{6}$/.test(licenseKey.trim());
@@ -137,7 +141,7 @@ export default function MemberAccessPanel({ lang, configured, ownerAccessConfigu
             <button type="button" className="subscription-cta" disabled={busy || !permanentReady} onClick={validate}>
               {busy ? (fr ? "Vérification…" : "Checking…") : (fr ? "Ouvrir mon accès" : "Open owner access")}
             </button>
-            <button type="button" className="member-subscribe-link" onClick={() => { setOwnerPermanentMode(false); setOtpSent(false); setLicenseKey(""); setError(""); }}>
+            <button type="button" className="member-subscribe-link" onClick={() => { setOwnerPermanentMode(false); setOtpSent(false); setLicenseKey(""); setError(""); void requestOwnerCode(); }}>
               {fr ? "Recevoir plutôt un code par courriel" : "Send me an email code instead"}
             </button>
           </>
@@ -148,14 +152,16 @@ export default function MemberAccessPanel({ lang, configured, ownerAccessConfigu
                 ? (fr
                   ? `Un code temporaire a été envoyé à ${emailHint || "votre courriel"}. Il expire dans 10 minutes.`
                   : `A temporary code was sent to ${emailHint || "your email"}. It expires in 10 minutes.`)
-                : (fr
-                  ? "Cliquez sur le bouton. Un code temporaire à 6 chiffres sera envoyé automatiquement à votre courriel propriétaire."
-                  : "Click the button. A temporary 6-digit code will be sent automatically to your owner email.")}
+                : busy
+                  ? (fr ? "Envoi automatique du code à votre courriel…" : "Automatically sending the code to your email…")
+                  : (fr
+                    ? "L’envoi automatique n’a pas réussi. Vous pouvez réessayer ou utiliser votre ancien code permanent."
+                    : "Automatic delivery did not succeed. You can try again or use your permanent code.")}
             </p>
 
             {!otpSent ? (
               <button type="button" className="subscription-cta" disabled={busy} onClick={requestOwnerCode}>
-                {busy ? (fr ? "Envoi…" : "Sending…") : (fr ? "M’envoyer mon code" : "Send my code")}
+                {busy ? (fr ? "Envoi…" : "Sending…") : (fr ? "Réessayer l’envoi" : "Try sending again")}
               </button>
             ) : (
               <>
@@ -187,7 +193,7 @@ export default function MemberAccessPanel({ lang, configured, ownerAccessConfigu
         )}
 
         {ownerAccessConfigured ? (
-          <button type="button" className="member-subscribe-link" onClick={toggleOwnerMode}>
+          <button type="button" className="member-subscribe-link" onClick={() => { void toggleOwnerMode(); }}>
             {ownerMode ? (fr ? "Retour à l’accès membre" : "Back to member access") : (fr ? "Je suis le propriétaire" : "I am the owner")}
           </button>
         ) : null}
