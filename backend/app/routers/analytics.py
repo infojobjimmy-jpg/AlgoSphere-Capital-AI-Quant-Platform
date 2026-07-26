@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import time
 from typing import Any
 
@@ -19,6 +20,7 @@ from app.db.session import get_session
 from app.services.whop_auth import current_member
 
 router = APIRouter()
+logger = logging.getLogger("acap.analytics")
 
 ALLOWED_EVENTS = {"page_view", "app_open", "checkout_click", "member_login", "gps_open", "community_open"}
 _PRESENCE_IDX = lambda: f"{settings.app_slug}:presence:index"
@@ -28,6 +30,8 @@ _PRESENCE_TTL = 90
 
 # ---------------------------------------------------------------------------
 # Table bootstrap (called once at startup from main.py)
+# IMPORTANT: this DDL must stay in sync with infra/sql/005_visitor_sessions.sql.
+# When adding columns: update both files + add an ALTER TABLE guard below.
 # ---------------------------------------------------------------------------
 
 _VISITOR_SESSIONS_DDL = """
@@ -44,12 +48,14 @@ CREATE TABLE IF NOT EXISTS visitor_sessions (
     last_seen           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     duration_seconds    INTEGER     NOT NULL DEFAULT 0,
     page_views          INTEGER     NOT NULL DEFAULT 1,
+    heartbeat_count     INTEGER     NOT NULL DEFAULT 1,
     landing_page        TEXT,
     last_page           TEXT,
     referrer_domain     TEXT,
     utm_source          TEXT,
     utm_campaign        TEXT,
     device_type         TEXT,
+    consent             TEXT        NOT NULL DEFAULT 'null',
     checkout_clicked    BOOLEAN     NOT NULL DEFAULT FALSE,
     login_completed     BOOLEAN     NOT NULL DEFAULT FALSE,
     converted_to_member BOOLEAN     NOT NULL DEFAULT FALSE
@@ -59,6 +65,8 @@ CREATE INDEX        IF NOT EXISTS idx_vs_first_seen ON visitor_sessions (first_s
 CREATE INDEX        IF NOT EXISTS idx_vs_last_seen  ON visitor_sessions (last_seen  DESC);
 CREATE INDEX        IF NOT EXISTS idx_vs_member_id  ON visitor_sessions (member_id);
 CREATE INDEX        IF NOT EXISTS idx_vs_utm_src    ON visitor_sessions (utm_source);
+ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS heartbeat_count INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS consent         TEXT    NOT NULL DEFAULT 'null';
 """
 
 
@@ -90,6 +98,8 @@ class HeartbeatBody(BaseModel):
     referrer_domain: str = Field(default="", max_length=120)
     utm_source: str = Field(default="", max_length=120)
     utm_campaign: str = Field(default="", max_length=120)
+    # "accepted" | "declined" | "null" — frontend sends analyticsConsent() value
+    consent: str = Field(default="null", max_length=10)
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +122,7 @@ def _duration_label(seconds: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Existing endpoint
+# Existing event endpoint
 # ---------------------------------------------------------------------------
 
 @router.post("/event")
@@ -139,7 +149,6 @@ async def record_event(body: AnalyticsEvent, request: Request, session: AsyncSes
             "properties": json.dumps(safe_properties, separators=(",", ":")),
         },
     )
-    # Mark checkout_clicked on visitor session if applicable
     if body.event == "checkout_click":
         await session.execute(
             text("""
@@ -155,6 +164,12 @@ async def record_event(body: AnalyticsEvent, request: Request, session: AsyncSes
 
 # ---------------------------------------------------------------------------
 # Heartbeat — presence tracking
+#
+# Consent rules:
+#   declined + anonymous  → Redis minimal (no UTM/device/referrer), NO DB record.
+#   declined + member     → Redis minimal, DB operational only (no UTM/device/referrer).
+#   accepted              → Redis full, DB full.
+#   null (unknown)        → treated as declined (conservative default).
 # ---------------------------------------------------------------------------
 
 @router.post("/heartbeat")
@@ -164,8 +179,9 @@ async def heartbeat(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     member = current_member(request)
-    is_auth = member is not None and member.get("role") != "owner"
+    is_auth = member is not None and member.get("role") not in {"owner"}
     is_owner = member is not None and member.get("role") == "owner"
+    consent_accepted = body.consent == "accepted"
 
     membership_id = str(member.get("membership_id", "") if member else "")
     username = str(member.get("username", "") if member else "")
@@ -173,20 +189,24 @@ async def heartbeat(
     plan = str(member.get("plan", "") if member else "")
 
     now_ts = int(time.time())
+
+    # ── Redis presence ───────────────────────────────────────────────────────
+    # Always written (needed for live-visitors count).
+    # Marketing fields stripped when consent not accepted.
     presence_data = json.dumps({
         "visitor_session_id": body.visitor_session_id,
         "type": "owner" if is_owner else ("member" if is_auth else "anonymous"),
-        "member_id": membership_id if is_auth else "",
-        "username": username if is_auth else "",
-        "product_id": product_id if is_auth else "",
+        "member_id": membership_id if (is_auth or is_owner) else "",
+        "username": username if (is_auth or is_owner) else "",
         "plan": plan if is_auth else "",
         "page": body.page,
-        "device_type": body.device_type,
-        "utm_source": body.utm_source,
-        "utm_campaign": body.utm_campaign,
         "last_seen": now_ts,
+        "device_type": body.device_type if consent_accepted else "unknown",
+        "utm_source": body.utm_source if consent_accepted else "",
+        "utm_campaign": body.utm_campaign if consent_accepted else "",
     })
 
+    redis_ok = False
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
     try:
         pipe = redis_client.pipeline()
@@ -194,10 +214,21 @@ async def heartbeat(
         pipe.zadd(_PRESENCE_IDX(), {body.visitor_session_id: now_ts})
         pipe.zremrangebyscore(_PRESENCE_IDX(), 0, now_ts - _PRESENCE_TTL)
         await pipe.execute()
+        redis_ok = True
+    except Exception as exc:
+        logger.error("heartbeat redis write failed: %s", type(exc).__name__)
     finally:
         await redis_client.aclose()
 
-    # Upsert visitor session in DB
+    # ── PostgreSQL persistence ───────────────────────────────────────────────
+    # Anonymous visitors with no consent → skip entirely (no persistent record).
+    if not consent_accepted and not is_auth and not is_owner:
+        return {"ok": True, "redis": redis_ok, "db": None}
+
+    # Marketing fields stored only when consent is accepted.
+    store_marketing = consent_accepted
+
+    db_ok = False
     try:
         await session.execute(
             text("""
@@ -205,48 +236,58 @@ async def heartbeat(
                     visitor_session_id, visitor_id, member_id, username,
                     product_id, plan, authenticated, landing_page, last_page,
                     referrer_domain, utm_source, utm_campaign, device_type,
-                    login_completed, converted_to_member
+                    login_completed, converted_to_member, consent
                 ) VALUES (
                     :vsid, :vid, :member_id, :username,
                     :product_id, :plan, :auth, :page, :page,
                     :referrer, :utm_src, :utm_camp, :device,
-                    :login, :converted
+                    :login, :converted, :consent
                 )
                 ON CONFLICT (visitor_session_id) DO UPDATE SET
                     last_seen        = NOW(),
-                    duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - visitor_sessions.first_seen))::INTEGER),
-                    page_views       = visitor_sessions.page_views + 1,
+                    duration_seconds = GREATEST(0,
+                        EXTRACT(EPOCH FROM (NOW() - visitor_sessions.first_seen))::INTEGER
+                    ),
+                    heartbeat_count  = visitor_sessions.heartbeat_count + 1,
+                    page_views       = CASE
+                                         WHEN EXCLUDED.last_page IS DISTINCT FROM visitor_sessions.last_page
+                                         THEN visitor_sessions.page_views + 1
+                                         ELSE visitor_sessions.page_views
+                                       END,
                     last_page        = EXCLUDED.last_page,
-                    member_id        = COALESCE(EXCLUDED.member_id, visitor_sessions.member_id),
-                    username         = COALESCE(NULLIF(EXCLUDED.username, ''), visitor_sessions.username),
+                    consent          = EXCLUDED.consent,
+                    member_id        = COALESCE(EXCLUDED.member_id,        visitor_sessions.member_id),
+                    username         = COALESCE(NULLIF(EXCLUDED.username, ''),   visitor_sessions.username),
                     product_id       = COALESCE(NULLIF(EXCLUDED.product_id, ''), visitor_sessions.product_id),
-                    plan             = COALESCE(NULLIF(EXCLUDED.plan, ''), visitor_sessions.plan),
+                    plan             = COALESCE(NULLIF(EXCLUDED.plan, ''),       visitor_sessions.plan),
                     authenticated    = visitor_sessions.authenticated OR EXCLUDED.authenticated,
-                    login_completed  = visitor_sessions.login_completed OR EXCLUDED.login_completed,
+                    login_completed  = visitor_sessions.login_completed  OR EXCLUDED.login_completed,
                     converted_to_member = visitor_sessions.converted_to_member OR EXCLUDED.converted_to_member
             """),
             {
                 "vsid": body.visitor_session_id,
-                "vid": body.visitor_id or None,
+                "vid": (body.visitor_id or None) if consent_accepted else None,
                 "member_id": membership_id or None,
                 "username": username or None,
                 "product_id": product_id or None,
                 "plan": plan or None,
                 "auth": is_auth,
                 "page": body.page,
-                "referrer": body.referrer_domain or None,
-                "utm_src": body.utm_source or None,
-                "utm_camp": body.utm_campaign or None,
-                "device": body.device_type or None,
+                "referrer": (body.referrer_domain or None) if store_marketing else None,
+                "utm_src": (body.utm_source or None) if store_marketing else None,
+                "utm_camp": (body.utm_campaign or None) if store_marketing else None,
+                "device": (body.device_type or None) if store_marketing else None,
                 "login": is_auth,
                 "converted": is_auth and bool(product_id),
+                "consent": body.consent,
             },
         )
         await session.commit()
-    except Exception:
-        pass  # Presence in Redis is more critical than DB persistence
+        db_ok = True
+    except Exception as exc:
+        logger.error("visitor_sessions upsert failed: %s", type(exc).__name__)
 
-    return {"ok": True}
+    return {"ok": True, "redis": redis_ok, "db": db_ok}
 
 
 # ---------------------------------------------------------------------------
@@ -369,8 +410,9 @@ async def visitor_history(
         text(f"""
             SELECT id, visitor_session_id, member_id, username, product_id, plan,
                    authenticated, first_seen, last_seen, duration_seconds, page_views,
-                   landing_page, last_page, referrer_domain, utm_source, utm_campaign,
-                   device_type, checkout_clicked, login_completed, converted_to_member
+                   heartbeat_count, landing_page, last_page, referrer_domain,
+                   utm_source, utm_campaign, device_type, consent,
+                   checkout_clicked, login_completed, converted_to_member
             FROM visitor_sessions
             WHERE {where}
             ORDER BY {sort_col} {sort_dir}
@@ -382,13 +424,18 @@ async def visitor_history(
     today_stats = (await session.execute(text("""
         SELECT
           COUNT(*) FILTER (WHERE first_seen >= NOW() - INTERVAL '24 hours') AS new_today,
-          COUNT(*) FILTER (WHERE first_seen < NOW() - INTERVAL '24 hours' AND last_seen >= NOW() - INTERVAL '24 hours') AS returning_today,
-          COUNT(*) FILTER (WHERE authenticated = TRUE AND last_seen >= NOW() - INTERVAL '24 hours') AS auth_today,
-          COUNT(*) FILTER (WHERE checkout_clicked = TRUE AND last_seen >= NOW() - INTERVAL '24 hours') AS checkout_today,
-          COUNT(*) FILTER (WHERE converted_to_member = TRUE AND last_seen >= NOW() - INTERVAL '24 hours') AS converted_today,
+          COUNT(*) FILTER (WHERE first_seen < NOW() - INTERVAL '24 hours'
+                           AND last_seen >= NOW() - INTERVAL '24 hours') AS returning_today,
+          COUNT(*) FILTER (WHERE authenticated = TRUE
+                           AND last_seen >= NOW() - INTERVAL '24 hours') AS auth_today,
+          COUNT(*) FILTER (WHERE checkout_clicked = TRUE
+                           AND last_seen >= NOW() - INTERVAL '24 hours') AS checkout_today,
+          COUNT(*) FILTER (WHERE converted_to_member = TRUE
+                           AND last_seen >= NOW() - INTERVAL '24 hours') AS converted_today,
           COUNT(DISTINCT CASE WHEN last_seen >= NOW() - INTERVAL '7 days' THEN id END) AS total_7d,
           COUNT(DISTINCT CASE WHEN last_seen >= NOW() - INTERVAL '30 days' THEN id END) AS total_30d,
-          ROUND(AVG(duration_seconds) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days'))::INTEGER AS avg_duration_7d
+          ROUND(AVG(duration_seconds) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days'))::INTEGER
+              AS avg_duration_7d
         FROM visitor_sessions
     """))).mappings().one()
 
@@ -404,6 +451,7 @@ async def visitor_history(
             "duration_s": row["duration_seconds"],
             "duration_label": _duration_label(int(row["duration_seconds"] or 0)),
             "page_views": row["page_views"],
+            "heartbeat_count": row["heartbeat_count"],
             "landing_page": row["landing_page"],
             "last_page": row["last_page"],
             "utm_source": row["utm_source"],

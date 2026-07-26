@@ -106,10 +106,10 @@ async function pollTradingRest() {
 }
 
 export function startTradingStream(intervalMs = 2500) {
-  let pollId: ReturnType<typeof setInterval> | undefined;
+  let pollId: number | undefined;
   let ws: WebSocket | null = null;
   let stopped = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconnectTimer: number | undefined;
   let backoffMs = 2000;
 
   const stopPoll = () => {
