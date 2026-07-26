@@ -61,10 +61,26 @@ async def loop_satellites(bus: KafkaBus) -> None:
 
 
 async def loop_weather(bus: KafkaBus) -> None:
+    r_wx = redis_async.from_url(settings.redis_url, decode_responses=True)
+    _sources_key = f"{settings.app_slug}:sources"
     while True:
         try:
             wx = await fetch_global_weather_grid()
             await emit(bus, "weather", wx)
+            try:
+                raw = await r_wx.get(_sources_key)
+                src = json.loads(raw) if raw else {}
+                from datetime import datetime, timezone as _tz
+                src["weather"] = {
+                    "status": "live" if wx else "unavailable",
+                    "count": len(wx),
+                    "provider": "open_meteo",
+                    "error_code": None,
+                    "updated_at": datetime.now(_tz.utc).isoformat(),
+                }
+                await r_wx.set(_sources_key, json.dumps(src))
+            except Exception:
+                logger.debug("weather sources redis write failed", exc_info=True)
         except Exception:
             logger.exception("weather ingest failed")
             await emit(bus, "weather", [])
