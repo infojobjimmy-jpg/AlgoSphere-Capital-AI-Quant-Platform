@@ -42,6 +42,15 @@ type Snapshot = {
 
 type GpsMode = "car" | "truck";
 
+type RouteStep = {
+  instruction: string;
+  street_name: string;
+  distance_m: number;
+  duration_s: number;
+  maneuver_type: string;
+  location: { lat: number | null; lon: number | null };
+};
+
 const apiBase = "/api";
 
 function wsUrl(): string {
@@ -90,6 +99,40 @@ function rankSuggestion(r: { label: string; type: string }): number {
   return (cityTypes.includes(r.type) ? 0 : 1) * 10 - Math.min(r.label.split(",").length, 8);
 }
 
+function geoBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function closestRouteIndex(coords: [number, number][], lat: number, lon: number): number {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < coords.length; i++) {
+    const d = haversineKm(lat, lon, coords[i][1], coords[i][0]);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+function remainingKmFromIndex(coords: [number, number][], idx: number): number {
+  let km = 0;
+  for (let i = idx; i < coords.length - 1; i++) {
+    km += haversineKm(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0]);
+  }
+  return km;
+}
+
+function turnIcon(maneuverType: string, modifier: string): string {
+  if (maneuverType === "arrive") return "🏁";
+  if (maneuverType === "depart") return "🚀";
+  if (maneuverType === "roundabout") return "↻";
+  if (modifier.includes("left")) return "↰";
+  if (modifier.includes("right")) return "↱";
+  return "↑";
+}
+
 export default function App() {
   const [lang, setLang] = useState<Language>(savedLanguage);
   useInterfaceTranslation(lang);
@@ -118,6 +161,13 @@ export default function App() {
   const [routeError, setRouteError] = useState<string>("");
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number; destination: string; warning?: string } | null>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<Array<{ label: string; lat: number; lon: number; type: string }>>([]);
+  const [navigationActive, setNavigationActive] = useState(false);
+  const [followUser, setFollowUser] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"satellite" | "hybrid" | "road">("satellite");
+  const [remainingKm, setRemainingKm] = useState<number | null>(null);
+  const [remainingMin, setRemainingMin] = useState<number | null>(null);
+  const [nextStep, setNextStep] = useState<RouteStep | null>(null);
+  const [rerouteStatus, setRerouteStatus] = useState<"idle" | "loading">("idle");
   const [roadStatus, setRoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [roadCounts, setRoadCounts] = useState({ cameras: 0, inspections: 0, restAreas: 0, events: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +188,18 @@ export default function App() {
 
   const trailMemRef = useRef<Map<string, Cesium.Cartesian3[]>>(new Map());
   const lastFocusSigRef = useRef<string>("");
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const routeCoordsRef = useRef<[number, number][]>([]);
+  const routeStepsRef = useRef<RouteStep[]>([]);
+  const destinationRef = useRef<{ label: string; lat: number; lon: number } | null>(null);
+  const lastRerouteRef = useRef<number>(0);
+  const offRouteCountRef = useRef<number>(0);
+  const smoothHeadingRef = useRef<number>(0);
+  const gpsMarkerRef = useRef<Cesium.PointPrimitive | null>(null);
+  const satLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+  const labelsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+  const handlePositionUpdateRef = useRef<(c: GeolocationCoordinates) => void>(() => {});
+  const rerouteCallbackRef = useRef<((lat: number, lon: number) => void) | null>(null);
 
   const [liveSnap, setLiveSnap] = useState<Snapshot | null>(null);
   const [replayFrames, setReplayFrames] = useState<Snapshot[]>([]);
@@ -258,7 +320,7 @@ export default function App() {
     viewer.scene.maximumRenderTimeChange = Infinity;
 
     viewer.imageryLayers.removeAll();
-    viewer.imageryLayers.addImageryProvider(
+    satLayerRef.current = viewer.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
         url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         credit: new Cesium.Credit("Earth imagery © Esri and imagery partners", false),
@@ -299,6 +361,43 @@ export default function App() {
       viewer.destroy();
     };
   }, []);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (labelsLayerRef.current) {
+      try { viewer.imageryLayers.remove(labelsLayerRef.current); } catch { /* ignore */ }
+      labelsLayerRef.current = null;
+    }
+    if (satLayerRef.current) {
+      try { viewer.imageryLayers.remove(satLayerRef.current); } catch { /* ignore */ }
+      satLayerRef.current = null;
+    }
+    if (mapStyle === "road") {
+      satLayerRef.current = viewer.imageryLayers.addImageryProvider(
+        new Cesium.UrlTemplateImageryProvider({
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+          credit: new Cesium.Credit("Esri World Street Map", false),
+        }),
+      );
+    } else {
+      satLayerRef.current = viewer.imageryLayers.addImageryProvider(
+        new Cesium.UrlTemplateImageryProvider({
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          credit: new Cesium.Credit("Earth imagery © Esri and imagery partners", false),
+        }),
+      );
+      if (mapStyle === "hybrid") {
+        labelsLayerRef.current = viewer.imageryLayers.addImageryProvider(
+          new Cesium.UrlTemplateImageryProvider({
+            url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Reference_Overlay/MapServer/tile/{z}/{y}/{x}",
+            credit: new Cesium.Credit("Esri Reference Overlay", false),
+          }),
+        );
+      }
+    }
+    viewer.scene.requestRender();
+  }, [mapStyle]);
 
   useEffect(() => {
     let stopped = false;
@@ -676,6 +775,167 @@ export default function App() {
     [leftPct],
   );
 
+  useEffect(() => {
+    handlePositionUpdateRef.current = (coords: GeolocationCoordinates) => {
+      const viewer = viewerRef.current;
+      const layers = layersRef.current;
+      if (!viewer || !layers) return;
+      const { latitude: lat, longitude: lon } = coords;
+      setCurrentPosition({ lat, lon });
+
+      if (gpsMarkerRef.current) {
+        gpsMarkerRef.current.position = Cesium.Cartesian3.fromDegrees(lon, lat, 50);
+      } else {
+        const gps = layers.gps;
+        gps.removeAll();
+        gpsMarkerRef.current = gps.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 50),
+          pixelSize: 15,
+          color: Cesium.Color.fromCssColorString("#7af8d6"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 3,
+        }) as Cesium.PointPrimitive;
+      }
+
+      if (followUser) {
+        const rc = routeCoordsRef.current;
+        let heading = smoothHeadingRef.current;
+        if (rc.length > 1) {
+          const idx = closestRouteIndex(rc, lat, lon);
+          const ahead = Math.min(idx + 5, rc.length - 1);
+          if (ahead > idx) {
+            const target = geoBearing(rc[idx][1], rc[idx][0], rc[ahead][1], rc[ahead][0]);
+            const diff = ((target - smoothHeadingRef.current + 540) % 360) - 180;
+            smoothHeadingRef.current = (smoothHeadingRef.current + diff * 0.25 + 360) % 360;
+            heading = smoothHeadingRef.current;
+          }
+        }
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1800),
+          orientation: {
+            heading: Cesium.Math.toRadians(heading),
+            pitch: Cesium.Math.toRadians(-40),
+            roll: 0,
+          },
+        });
+      }
+
+      viewer.scene.requestRender();
+
+      const rc = routeCoordsRef.current;
+      if (rc.length > 1) {
+        const idx = closestRouteIndex(rc, lat, lon);
+        const remKm = remainingKmFromIndex(rc, idx);
+        setRemainingKm(remKm);
+        const totalDurS = routeStepsRef.current.reduce((s, st) => s + st.duration_s, 0);
+        const totalKm = remainingKmFromIndex(rc, 0);
+        if (totalKm > 0 && totalDurS > 0) {
+          setRemainingMin((remKm / totalKm) * totalDurS / 60);
+        }
+
+        const steps = routeStepsRef.current;
+        let found: RouteStep | null = null;
+        for (const step of steps) {
+          if (step.location.lat == null || step.location.lon == null) continue;
+          const d = haversineKm(lat, lon, step.location.lat, step.location.lon);
+          if (d > 0.03 && d < 8) { found = step; break; }
+        }
+        setNextStep(found);
+
+        const closestDist = haversineKm(lat, lon, rc[idx][1], rc[idx][0]);
+        if (closestDist > 0.08) {
+          offRouteCountRef.current += 1;
+          if (offRouteCountRef.current >= 3) {
+            const now = Date.now();
+            if (now - lastRerouteRef.current > 20_000) {
+              lastRerouteRef.current = now;
+              offRouteCountRef.current = 0;
+              rerouteCallbackRef.current?.(lat, lon);
+            }
+          }
+        } else {
+          offRouteCountRef.current = 0;
+        }
+      }
+    };
+  }, [followUser]);
+
+  useEffect(() => {
+    rerouteCallbackRef.current = (lat: number, lon: number) => {
+      const dest = destinationRef.current;
+      if (!dest) return;
+      setRerouteStatus("loading");
+      const params = new URLSearchParams({
+        origin_lat: String(lat), origin_lon: String(lon),
+        destination_lat: String(dest.lat), destination_lon: String(dest.lon),
+        mode: gpsMode,
+      });
+      fetch(`${apiBase}/navigation/route?${params}`)
+        .then((r) => r.json())
+        .then((payload) => {
+          const newCoords: [number, number][] = payload.geometry?.coordinates ?? [];
+          const newSteps: RouteStep[] = payload.steps ?? [];
+          routeCoordsRef.current = newCoords;
+          routeStepsRef.current = newSteps;
+          const viewer = viewerRef.current;
+          const routeLayer = layersRef.current?.route;
+          if (viewer && routeLayer && newCoords.length) {
+            const pts = newCoords
+              .filter(([lo, la]) => isFinite(lo) && isFinite(la))
+              .map(([lo, la]) => Cesium.Cartesian3.fromDegrees(lo, la, 100));
+            routeLayer.removeAll();
+            routeLayer.add({ positions: pts, width: 6, material: Cesium.Material.fromType("Color", { color: new Cesium.Color(0.478, 0.973, 0.839, 1.0) }) });
+            viewer.scene.requestRender();
+          }
+          if (newCoords.length) {
+            setRemainingKm(remainingKmFromIndex(newCoords, 0));
+            setRemainingMin(Number(payload.duration_s || 0) / 60);
+          }
+        })
+        .catch(() => { /* silent */ })
+        .finally(() => setRerouteStatus("idle"));
+    };
+  }, [gpsMode]);
+
+  const startNavigation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    if (gpsWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+    }
+    setNavigationActive(true);
+    setFollowUser(true);
+    setMapStyle("hybrid");
+    offRouteCountRef.current = 0;
+    lastRerouteRef.current = 0;
+    smoothHeadingRef.current = 0;
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+      ({ coords }) => handlePositionUpdateRef.current(coords),
+      (err) => console.error("[GPS watch]", err),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10_000 },
+    );
+  }, []);
+
+  const stopNavigation = useCallback(() => {
+    if (gpsWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+    setNavigationActive(false);
+    setFollowUser(false);
+    setRemainingKm(null);
+    setRemainingMin(null);
+    setNextStep(null);
+    setRerouteStatus("idle");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (gpsWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      }
+    };
+  }, []);
+
   const locateUser = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsStatus("denied");
@@ -688,20 +948,25 @@ export default function App() {
         if (!viewer) return;
         const gps = layersRef.current?.gps;
         if (!gps) return;
-        gps.removeAll();
-        gps.add({
-          position: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 50),
-          pixelSize: 15,
-          color: Cesium.Color.fromCssColorString("#7af8d6"),
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 3,
-        });
+        if (gpsMarkerRef.current) {
+          gpsMarkerRef.current.position = Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 50);
+        } else {
+          gps.removeAll();
+          gpsMarkerRef.current = gps.add({
+            position: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 50),
+            pixelSize: 15,
+            color: Cesium.Color.fromCssColorString("#7af8d6"),
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 3,
+          }) as Cesium.PointPrimitive;
+        }
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(coords.longitude, coords.latitude, 450_000),
           duration: 1.8,
         });
         setCurrentPosition({ lat: coords.latitude, lon: coords.longitude });
         setGpsStatus("ready");
+        viewer.scene.requestRender();
       },
       () => setGpsStatus("denied"),
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
@@ -749,6 +1014,9 @@ export default function App() {
       }
       const routeLayer = layersRef.current?.route;
       if (!routeLayer) throw new Error(lang === "fr" ? "Globe non initialisé — rechargez la page." : "Globe not initialised — reload the page.");
+      destinationRef.current = match;
+      routeCoordsRef.current = coords;
+      routeStepsRef.current = (routePayload.steps ?? []) as RouteStep[];
       routeLayer.removeAll();
       routeLayer.add({
         positions: points,
@@ -763,9 +1031,13 @@ export default function App() {
         duration: 1.8,
         complete: () => { viewer.scene.requestRender(); },
       });
+      const distKm = Number(routePayload.distance_m || 0) / 1000;
+      const durMin = Number(routePayload.duration_s || 0) / 60;
+      setRemainingKm(distKm);
+      setRemainingMin(durMin);
       setRouteSummary({
-        distanceKm: Number(routePayload.distance_m || 0) / 1000,
-        durationMin: Number(routePayload.duration_s || 0) / 60,
+        distanceKm: distKm,
+        durationMin: durMin,
         destination: String(match.label),
         warning: routePayload.warning || undefined,
       });
@@ -894,6 +1166,37 @@ export default function App() {
         style={globeColStyle}
       >
         <div ref={hostRef} className="gaios-cesium" />
+        <div className="map-style-toggle">
+          <button type="button" className={mapStyle === "satellite" ? "is-active" : ""} onClick={() => setMapStyle("satellite")} title="Satellite">SAT</button>
+          <button type="button" className={mapStyle === "hybrid" ? "is-active" : ""} onClick={() => setMapStyle("hybrid")} title={lang === "fr" ? "Satellite + rues" : "Satellite + streets"}>HYB</button>
+          <button type="button" className={mapStyle === "road" ? "is-active" : ""} onClick={() => setMapStyle("road")} title={lang === "fr" ? "Carte routière" : "Road map"}>RTE</button>
+        </div>
+        {navigationActive ? (
+          <div className="nav-hud">
+            <div className="nav-hud-next">
+              <span className="nav-hud-icon">{nextStep ? turnIcon(nextStep.maneuver_type, nextStep.street_name) : "🏁"}</span>
+              <span className="nav-hud-street">{nextStep ? nextStep.instruction : (lang === "fr" ? "Arrivée imminente" : "Arriving soon")}</span>
+              {nextStep ? (
+                <span className="nav-hud-dist">
+                  {nextStep.distance_m < 1000 ? `${Math.round(nextStep.distance_m)} m` : `${(nextStep.distance_m / 1000).toFixed(1)} km`}
+                </span>
+              ) : null}
+            </div>
+            <div className="nav-hud-summary">
+              <strong>{remainingKm !== null ? `${remainingKm.toFixed(1)} km` : "—"}</strong>
+              <span>{remainingMin !== null ? `${Math.round(remainingMin)} min` : "—"}</span>
+            </div>
+            <div className="nav-hud-controls">
+              <button type="button" className={`nav-hud-btn ${followUser ? "is-active" : ""}`} onClick={() => setFollowUser((f) => !f)} title={lang === "fr" ? "Centrer sur ma position" : "Follow my position"}>
+                {followUser ? "⊙" : "◎"}
+              </button>
+              <button type="button" className="nav-hud-btn nav-hud-stop" onClick={stopNavigation} title={lang === "fr" ? "Arrêter la navigation" : "Stop navigation"}>✕</button>
+            </div>
+            {rerouteStatus === "loading" ? (
+              <div className="nav-hud-reroute">{lang === "fr" ? "Recalcul de l'itinéraire…" : "Rerouting…"}</div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {fullscreen === null ? (
         <div
@@ -1430,12 +1733,33 @@ export default function App() {
                 {routeError || (lang === "fr" ? "Activez votre position et vérifiez la destination." : "Enable your position and check the destination.")}
               </p>
             ) : null}
+            {navigationActive ? (
+              <div className="nav-active-status">
+                <span>{lang === "fr" ? "Navigation en cours" : "Navigation active"}</span>
+                <button type="button" className="gps-stop-nav-btn" onClick={stopNavigation}>
+                  {lang === "fr" ? "Arrêter" : "Stop"}
+                </button>
+              </div>
+            ) : null}
             {routeSummary ? (
               <div className="gps-route-summary">
-                <strong>{routeSummary.distanceKm.toFixed(1)} km · {Math.round(routeSummary.durationMin)} min</strong>
+                <strong>
+                  {remainingKm !== null && navigationActive
+                    ? `${remainingKm.toFixed(1)} km · ${remainingMin !== null ? Math.round(remainingMin) : Math.round(routeSummary.durationMin)} min restants`
+                    : `${routeSummary.distanceKm.toFixed(1)} km · ${Math.round(routeSummary.durationMin)} min`}
+                </strong>
                 <span>{routeSummary.destination}</span>
                 {routeSummary.warning ? <em>{lang === "fr" ? "Profil camion consultatif : respectez toujours la signalisation." : routeSummary.warning}</em> : null}
               </div>
+            ) : null}
+            {routeSummary && !navigationActive ? (
+              <button
+                type="button"
+                className="subscription-cta gps-start-nav-btn"
+                onClick={() => { startNavigation(); setShowGpsPanel(false); }}
+              >
+                {lang === "fr" ? "▶ Démarrer la navigation" : "▶ Start navigation"}
+              </button>
             ) : null}
             <div className="gps-road-status">
               <strong>

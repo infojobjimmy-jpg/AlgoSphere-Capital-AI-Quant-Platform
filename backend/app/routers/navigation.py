@@ -31,6 +31,36 @@ def _coordinates(item: dict[str, Any]) -> tuple[float, float] | None:
     return None
 
 
+def _step_instruction(maneuver_type: str, maneuver_modifier: str, street_name: str) -> str:
+    mod_fr: dict[str, str] = {
+        "left": "à gauche", "right": "à droite",
+        "slight left": "légèrement à gauche", "slight right": "légèrement à droite",
+        "sharp left": "fortement à gauche", "sharp right": "fortement à droite",
+        "uturn": "demi-tour", "straight": "tout droit",
+    }
+    mod = mod_fr.get(maneuver_modifier, maneuver_modifier)
+    road = f" sur {street_name}" if street_name else ""
+    if maneuver_type == "depart":
+        return f"Démarrez{road}" if street_name else "Démarrez"
+    if maneuver_type == "arrive":
+        return "Vous êtes arrivé à destination"
+    if maneuver_type in ("turn", "new name"):
+        return f"Tournez {mod}{road}"
+    if maneuver_type == "merge":
+        return f"Rejoignez{road}" if street_name else "Rejoignez la route"
+    if maneuver_type == "on ramp":
+        return f"Prenez la bretelle{' vers ' + street_name if street_name else ''}"
+    if maneuver_type == "off ramp":
+        return f"Prenez la sortie{' vers ' + street_name if street_name else ''}"
+    if maneuver_type == "fork":
+        return f"Gardez {mod} à la bifurcation" if mod else "Gardez votre voie à la bifurcation"
+    if maneuver_type == "roundabout":
+        return f"Prenez le rond-point{' vers ' + street_name if street_name else ''}"
+    if maneuver_type == "continue":
+        return f"Continuez{road}" if street_name else "Continuez tout droit"
+    return f"Continuez{road}" if street_name else "Continuez"
+
+
 def _distance_km(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
     radius = 6371.0088
     p1, p2 = math.radians(a_lat), math.radians(b_lat)
@@ -89,12 +119,32 @@ async def route(
     if not routes:
         raise HTTPException(status_code=404, detail="No route found")
     selected = routes[0]
+    steps: list[dict[str, Any]] = []
+    for leg in selected.get("legs", []):
+        for step in leg.get("steps", []):
+            maneuver = step.get("maneuver", {})
+            mtype = maneuver.get("type", "")
+            mmod = maneuver.get("modifier", "")
+            loc = maneuver.get("location", [None, None])
+            name = step.get("name") or ""
+            steps.append({
+                "instruction": _step_instruction(mtype, mmod, name),
+                "street_name": name,
+                "distance_m": step.get("distance", 0),
+                "duration_s": step.get("duration", 0),
+                "maneuver_type": mtype,
+                "location": {
+                    "lat": loc[1] if len(loc) > 1 else None,
+                    "lon": loc[0] if len(loc) > 0 else None,
+                },
+            })
     return {
         "mode": mode,
         "distance_m": selected.get("distance"),
         "duration_s": selected.get("duration"),
         "geometry": selected.get("geometry"),
         "legs": selected.get("legs", []),
+        "steps": steps,
         "truck_restrictions_applied": False,
         "warning": (
             "Truck profile is advisory only; posted restrictions take priority."
