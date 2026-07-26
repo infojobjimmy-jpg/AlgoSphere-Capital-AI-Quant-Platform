@@ -75,9 +75,18 @@ app.add_middleware(
 async def protect_mutating_routes(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         public_mutations = {
-            "/auth/license", "/auth/owner", "/auth/owner/change-code", "/auth/logout", "/account/preferences",
+            "/auth/license",
+            "/auth/owner",
+            "/auth/owner/request-code",
+            "/auth/owner/verify-code",
+            "/auth/owner/change-code",
+            "/auth/logout",
+            "/account/preferences",
             "/analytics/event",
-            "/social/profile", "/social/presence", "/social/connect", "/social/messages",
+            "/social/profile",
+            "/social/presence",
+            "/social/connect",
+            "/social/messages",
         }
         if request.url.path in public_mutations:
             return await call_next(request)
