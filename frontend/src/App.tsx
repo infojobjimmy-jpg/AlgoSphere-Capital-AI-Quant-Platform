@@ -77,6 +77,19 @@ function isPublicGeospatialTrace(value: unknown): boolean {
   return !/(?:\btrade\b|trade[_-]|\btrading\b|\bbroker\b|\bportfolio\b|\bmarket hub\b|\bpaper execution\b)/i.test(String(value ?? ""));
 }
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function rankSuggestion(r: { label: string; type: string }): number {
+  const cityTypes = ["city", "town", "village", "neighbourhood", "suburb", "hamlet", "quarter"];
+  return (cityTypes.includes(r.type) ? 0 : 1) * 10 - Math.min(r.label.split(",").length, 8);
+}
+
 export default function App() {
   const [lang, setLang] = useState<Language>(savedLanguage);
   useInterfaceTranslation(lang);
@@ -104,6 +117,7 @@ export default function App() {
   const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [routeError, setRouteError] = useState<string>("");
   const [routeSummary, setRouteSummary] = useState<{ distanceKm: number; durationMin: number; destination: string; warning?: string } | null>(null);
+  const [searchSuggestions, setSearchSuggestions] = useState<Array<{ label: string; lat: number; lon: number; type: string }>>([]);
   const [roadStatus, setRoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [roadCounts, setRoadCounts] = useState({ cameras: 0, inspections: 0, restAreas: 0, events: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -694,31 +708,21 @@ export default function App() {
     );
   }, [lang]);
 
-  const calculateNavigation = useCallback(async () => {
-    if (authConfigured && !member) {
-      setShowMemberAccess(true);
-      return;
-    }
-    if (!currentPosition) {
-      locateUser();
-      setRouteError(lang === "fr" ? "Activez d'abord votre position GPS." : "Enable your GPS position first.");
-      setRouteStatus("error");
-      return;
-    }
-    if (destination.trim().length < 3) {
-      setRouteError(lang === "fr" ? "Saisissez au moins 3 caractères pour la destination." : "Enter at least 3 characters for the destination.");
-      setRouteStatus("error");
-      return;
-    }
+  const applyRoute = useCallback(async (match: { label: string; lat: number; lon: number }) => {
+    if (!currentPosition) return;
+    setSearchSuggestions([]);
     setRouteStatus("loading");
     setRouteSummary(null);
     setRouteError("");
     try {
-      const searchResponse = await fetch(`${apiBase}/navigation/search?q=${encodeURIComponent(destination.trim())}`);
-      if (!searchResponse.ok) throw new Error(lang === "fr" ? "Service de recherche indisponible." : "Address search unavailable.");
-      const searchPayload = await searchResponse.json();
-      const match = searchPayload.results?.[0];
-      if (!match) throw new Error(lang === "fr" ? `Destination introuvable : « ${destination.trim()} ». Essayez une ville ou une adresse plus précise.` : `Destination not found: "${destination.trim()}". Try a city name or a more specific address.`);
+      const straightKm = haversineKm(currentPosition.lat, currentPosition.lon, Number(match.lat), Number(match.lon));
+      if (straightKm > 4000) {
+        throw new Error(
+          lang === "fr"
+            ? `« ${match.label.split(",")[0]} » se trouve à environ ${Math.round(straightKm).toLocaleString("fr-CA")} km — vérifiez la destination.`
+            : `"${match.label.split(",")[0]}" is ~${Math.round(straightKm).toLocaleString()} km away — please check the destination.`
+        );
+      }
       const params = new URLSearchParams({
         origin_lat: String(currentPosition.lat),
         origin_lon: String(currentPosition.lon),
@@ -762,7 +766,7 @@ export default function App() {
       setRouteSummary({
         distanceKm: Number(routePayload.distance_m || 0) / 1000,
         durationMin: Number(routePayload.duration_s || 0) / 60,
-        destination: String(match.label || destination),
+        destination: String(match.label),
         warning: routePayload.warning || undefined,
       });
       setRouteStatus("ready");
@@ -772,7 +776,49 @@ export default function App() {
       setRouteError(msg);
       setRouteStatus("error");
     }
-  }, [authConfigured, currentPosition, destination, gpsMode, lang, locateUser, member]);
+  }, [currentPosition, gpsMode, lang]);
+
+  const calculateNavigation = useCallback(async () => {
+    if (authConfigured && !member) { setShowMemberAccess(true); return; }
+    if (!currentPosition) {
+      locateUser();
+      setRouteError(lang === "fr" ? "Activez d'abord votre position GPS." : "Enable your GPS position first.");
+      setRouteStatus("error");
+      return;
+    }
+    if (destination.trim().length < 3) {
+      setRouteError(lang === "fr" ? "Saisissez au moins 3 caractères pour la destination." : "Enter at least 3 characters for the destination.");
+      setRouteStatus("error");
+      return;
+    }
+    setRouteStatus("loading");
+    setRouteSummary(null);
+    setRouteError("");
+    setSearchSuggestions([]);
+    try {
+      const searchResponse = await fetch(`${apiBase}/navigation/search?q=${encodeURIComponent(destination.trim())}`);
+      if (!searchResponse.ok) throw new Error(lang === "fr" ? "Service de recherche indisponible." : "Address search unavailable.");
+      const searchPayload = await searchResponse.json();
+      const results: Array<{ label: string; lat: number; lon: number; type: string }> = searchPayload.results ?? [];
+      if (!results.length) throw new Error(
+        lang === "fr"
+          ? `Destination introuvable : « ${destination.trim()} ». Essayez une ville ou une adresse plus précise.`
+          : `Destination not found: "${destination.trim()}". Try a city name or a more specific address.`
+      );
+      const sorted = [...results].sort((a, b) => rankSuggestion(a) - rankSuggestion(b));
+      if (sorted.length === 1) {
+        await applyRoute(sorted[0]);
+      } else {
+        setSearchSuggestions(sorted);
+        setRouteStatus("idle");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Navigation]", msg, err);
+      setRouteError(msg);
+      setRouteStatus("error");
+    }
+  }, [authConfigured, applyRoute, currentPosition, destination, lang, locateUser, member]);
 
   useEffect(() => {
     if (!currentPosition || (authConfigured && !member)) return;
@@ -1354,12 +1400,27 @@ export default function App() {
               {lang === "fr" ? "Destination (Canada ou États-Unis)" : "Destination (Canada or United States)"}
               <input
                 value={destination}
-                onChange={(event) => setDestination(event.target.value)}
+                onChange={(event) => { setDestination(event.target.value); setSearchSuggestions([]); }}
                 onKeyDown={(event) => { if (event.key === "Enter" && routeStatus !== "loading") calculateNavigation(); }}
                 placeholder={lang === "fr" ? "Adresse, ville ou lieu" : "Address, city or place"}
               />
             </label>
-            <button type="button" className="subscription-cta gps-route-btn" onClick={calculateNavigation} disabled={routeStatus === "loading"}>
+            {searchSuggestions.length > 0 ? (
+              <ul className="gps-suggestions">
+                {searchSuggestions.map((s, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      className="gps-suggestion-item"
+                      onClick={() => { setDestination(s.label); void applyRoute(s); }}
+                    >
+                      {s.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <button type="button" className="subscription-cta gps-route-btn" onClick={calculateNavigation} disabled={routeStatus === "loading" || searchSuggestions.length > 0}>
               {routeStatus === "loading"
                 ? (lang === "fr" ? "Calcul de l’itinéraire…" : "Calculating route…")
                 : (lang === "fr" ? "Calculer et afficher l’itinéraire" : "Calculate and show route")}
