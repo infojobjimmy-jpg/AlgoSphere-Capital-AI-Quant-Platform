@@ -5,9 +5,10 @@ import math
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import settings
+from app.services.whop_auth import require_active_member
 
 router = APIRouter()
 
@@ -103,6 +104,7 @@ async def route(
     destination_lat: float = Query(ge=-90, le=90),
     destination_lon: float = Query(ge=-180, le=180),
     mode: str = Query(default="car", pattern="^(car|truck)$"),
+    _member: dict = Depends(require_active_member),
 ) -> dict:
     url = (
         f"{settings.navigation_osrm_base_url.rstrip('/')}/route/v1/driving/"
@@ -189,6 +191,7 @@ async def nearby(
     lat: float = Query(ge=-90, le=90),
     lon: float = Query(ge=-180, le=180),
     radius_km: float = Query(default=100, ge=1, le=500),
+    _member: dict = Depends(require_active_member),
 ) -> dict:
     async with httpx.AsyncClient(timeout=settings.navigation_http_timeout_sec) as client:
         results = await asyncio.gather(*(_fetch(client, category, url) for category, url in ONTARIO_511.items()))

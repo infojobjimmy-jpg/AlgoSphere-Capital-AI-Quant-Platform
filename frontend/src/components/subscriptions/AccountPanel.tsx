@@ -83,9 +83,42 @@ export default function AccountPanel({ lang, member, onClose, onLogout }: Props)
         <div className="subscription-kicker">ALGOSPHERE MEMBER</div>
         <h2>{fr ? "Mon compte" : "My account"}</h2>
         <div className="account-summary">
-          <span><small>{fr ? "Forfait" : "Plan"}</small><strong>{member.role === "owner" ? (fr ? "AlgoSphere Global — Propriétaire" : "AlgoSphere Global — Owner") : String(member.product_name || member.product_id || "AlgoSphere")}</strong></span>
-          <span><small>{fr ? "État" : "Status"}</small><strong>{String(member.status || "active")}</strong></span>
-          <span><small>{fr ? "Expiration / renouvellement" : "Expiration / renewal"}</small><strong>{member.role === "owner" ? (fr ? "Accès propriétaire" : "Owner access") : member.expires_at ? new Date(String(member.expires_at)).toLocaleDateString(fr ? "fr-CA" : "en-US") : (fr ? "Selon Whop" : "Managed by Whop")}</strong></span>
+          <span>
+            <small>{fr ? "Forfait" : "Plan"}</small>
+            <strong>
+              {member.role === "owner"
+                ? (fr ? "AlgoSphere Global — Propriétaire" : "AlgoSphere Global — Owner")
+                : String(member.product_name || member.product_id || "AlgoSphere")}
+            </strong>
+          </span>
+          <span>
+            <small>{fr ? "Niveau" : "Tier"}</small>
+            <strong style={{ textTransform: "capitalize" }}>
+              {member.role === "owner" ? "Owner" : String(member.plan || "—")}
+            </strong>
+          </span>
+          <span>
+            <small>{fr ? "État" : "Status"}</small>
+            <strong>{String(member.status || "active")}</strong>
+          </span>
+          <span>
+            <small>{fr ? "Expiration / renouvellement" : "Expiration / renewal"}</small>
+            <strong>
+              {member.role === "owner"
+                ? (fr ? "Accès propriétaire" : "Owner access")
+                : member.expires_at
+                  ? new Date(String(member.expires_at)).toLocaleDateString(fr ? "fr-CA" : "en-US")
+                  : (fr ? "Selon Whop" : "Managed by Whop")}
+            </strong>
+          </span>
+          <span>
+            <small>{fr ? "Rappel de session" : "Session"}</small>
+            <strong>
+              {member.remember_me
+                ? (fr ? "Se souvenir de moi actif — 30 jours" : "Remember me — 30 days")
+                : (fr ? "Session uniquement — 12 heures" : "Session only — 12 hours")}
+            </strong>
+          </span>
         </div>
         <h3>{fr ? "Mes favoris" : "My favorites"}</h3>
         <div className="account-add"><input value={favorite} onChange={(e) => setFavorite(e.target.value)} placeholder={fr ? "Lieu, navire, avion…" : "Place, ship, aircraft…"} /><button onClick={() => { if (favorite.trim()) { void save({ ...preferences, favorites: [...preferences.favorites, { name: favorite.trim() }] }); setFavorite(""); } }}>+</button></div>

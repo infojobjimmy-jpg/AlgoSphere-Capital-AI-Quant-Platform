@@ -25,8 +25,15 @@ class Settings(BaseSettings):
     windy_webcams_api_key: str | None = None
     whop_api_key: str | None = None
     whop_allowed_product_ids: str = "prod_bHg2Q9qH34ABM,prod_tGJzw7gVSEPgi,prod_uqA3jSjF5t3fy"
+    whop_webhook_secret: str | None = None
+    # Set after confirming product IDs in Whop dashboard — empty means all valid members get explorer access
+    whop_plan_explorer_ids: str = ""
+    whop_plan_pro_ids: str = ""
+    whop_plan_business_ids: str = ""
     auth_session_secret: str | None = None
     auth_session_hours: int = 168
+    auth_remember_me_days: int = 30
+    auth_default_session_hours: int = 12
     owner_access_code: str | None = None
     owner_email: str = "infojobjimmy@gmail.com"
     owner_login_max_attempts: int = 5
@@ -90,6 +97,17 @@ class Settings(BaseSettings):
     self_code_candidate_command: str = "python -m compileall -q app"
     self_code_command_timeout_sec: int = 180
     self_code_min_improvement: float = 0.02
+
+    def plan_for_product_id(self, product_id: str) -> str:
+        def _split(raw: str) -> set[str]:
+            return {x.strip() for x in raw.split(",") if x.strip()}
+        if product_id in _split(self.whop_plan_business_ids):
+            return "business"
+        if product_id in _split(self.whop_plan_pro_ids):
+            return "pro"
+        if product_id in _split(self.whop_plan_explorer_ids):
+            return "explorer"
+        return "explorer"
 
     def redis_snapshot_key(self) -> str:
         return f"{self.app_slug}:snapshot:latest"

@@ -17,14 +17,17 @@ router = APIRouter()
 
 class LicenseLogin(BaseModel):
     license_key: str = Field(min_length=3, max_length=200)
+    remember_me: bool = True
 
 
 class OwnerLogin(BaseModel):
     access_code: str = Field(min_length=12, max_length=200)
+    remember_me: bool = True
 
 
 class OwnerOtpVerify(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    remember_me: bool = True
 
 
 class OwnerCodeChange(BaseModel):
@@ -56,6 +59,7 @@ def _owner_member() -> dict:
         "membership_id": "owner",
         "product_id": "algosphere-owner",
         "product_name": "AlgoSphere Global — Propriétaire",
+        "plan": "owner",
         "status": "active",
         "user_id": "algosphere-owner",
         "username": settings.owner_email,
@@ -65,18 +69,24 @@ def _owner_member() -> dict:
     }
 
 
-def _set_owner_session(response: Response) -> dict:
+def _session_hours(remember_me: bool) -> int:
+    if remember_me:
+        return int(settings.auth_remember_me_days) * 24
+    return int(settings.auth_default_session_hours)
+
+
+def _set_session_cookie(response: Response, token: str, remember_me: bool) -> None:
+    kwargs: dict = {"httponly": True, "secure": True, "samesite": "lax", "path": "/"}
+    if remember_me:
+        kwargs["max_age"] = int(settings.auth_remember_me_days) * 24 * 3600
+    response.set_cookie("algosphere_session", token, **kwargs)
+
+
+def _set_owner_session(response: Response, remember_me: bool = True) -> dict:
     owner = _owner_member()
-    token = create_session(owner)
-    response.set_cookie(
-        "algosphere_session",
-        token,
-        max_age=int(settings.auth_session_hours) * 3600,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        path="/",
-    )
+    owner["remember_me"] = remember_me
+    token = create_session(owner, hours=_session_hours(remember_me))
+    _set_session_cookie(response, token, remember_me)
     return owner
 
 
@@ -107,17 +117,13 @@ async def me(request: Request) -> dict:
 @router.post("/license")
 async def license_login(body: LicenseLogin, response: Response) -> dict:
     member = await validate_license(body.license_key)
-    token = create_session(member)
-    response.set_cookie(
-        "algosphere_session",
-        token,
-        max_age=7 * 24 * 3600,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        path="/",
-    )
-    return {"authenticated": True, "member": member}
+    member["_lk"] = body.license_key.strip()
+    member["remember_me"] = body.remember_me
+    token = create_session(member, hours=_session_hours(body.remember_me))
+    _set_session_cookie(response, token, body.remember_me)
+    public_member = {k: v for k, v in member.items() if not k.startswith("_")}
+    public_member.pop("email", None)
+    return {"authenticated": True, "member": public_member}
 
 
 @router.post("/owner/request-code")
@@ -202,7 +208,7 @@ async def verify_owner_code(body: OwnerOtpVerify, request: Request, response: Re
     finally:
         await client.aclose()
 
-    owner = _set_owner_session(response)
+    owner = _set_owner_session(response, remember_me=body.remember_me)
     return {"authenticated": True, "member": owner}
 
 
@@ -230,7 +236,7 @@ async def owner_login(body: OwnerLogin, request: Request, response: Response) ->
     finally:
         await client.aclose()
 
-    owner = _set_owner_session(response)
+    owner = _set_owner_session(response, remember_me=body.remember_me)
     return {"authenticated": True, "member": owner}
 
 

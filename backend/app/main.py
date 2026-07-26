@@ -13,7 +13,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
 from app.db.session import ensure_database
-from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social
+from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social, webhooks
 from app.services.whop_auth import configured as auth_configured, read_session
 from app.routers import navigation, self_code, system, trading
 from app.market_hub_bus import market_hub_broadcaster
@@ -87,6 +87,7 @@ async def protect_mutating_routes(request: Request, call_next):
             "/social/presence",
             "/social/connect",
             "/social/messages",
+            "/webhooks/whop",
         }
         if request.url.path in public_mutations:
             return await call_next(request)
@@ -117,6 +118,7 @@ app.include_router(cameras.router, prefix="/cameras", tags=["cameras"])
 app.include_router(decisions.router, prefix="/decisions", tags=["decisions"])
 app.include_router(goals.router, prefix="/goals", tags=["goals"])
 app.include_router(metrics_router.router, prefix="/intel", tags=["intel"])
+app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 if not settings.public_geospatial_mode:
     app.include_router(trading.router, prefix="/trading", tags=["trading"])
     app.include_router(self_code.router, prefix="/self-code", tags=["self-code"])
