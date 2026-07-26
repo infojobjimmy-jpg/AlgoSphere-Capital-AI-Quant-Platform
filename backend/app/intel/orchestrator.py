@@ -16,6 +16,7 @@ from app.agents.watcher import run_watcher
 from app.config import settings
 from app.fusion.event_engine import detect_events, events_to_dicts
 from app.learning.adaptive_thresholds import adapt_from_cycle, load_thresholds
+from app.services import camera_pipeline as _cam_pipeline
 
 
 def forecast_counts(history: deque[int]) -> dict[str, float]:
@@ -203,9 +204,42 @@ async def build_snapshot(
         except Exception:
             focus = None
 
+    _now = datetime.now(timezone.utc).isoformat()
+    sources = {
+        "cameras": dict(_cam_pipeline.camera_source_status),
+        "aircraft": {
+            "status": "live" if aircraft else "unavailable",
+            "count": len(aircraft),
+            "provider": "opensky_network",
+            "error_code": None,
+            "updated_at": _now,
+        },
+        "satellites": {
+            "status": "live" if layers.get("satellites") else "unavailable",
+            "count": len(layers.get("satellites") or []),
+            "provider": "celestrak_spacetrack",
+            "error_code": None,
+            "updated_at": _now,
+        },
+        "ships": {
+            "status": "live" if ships else "unavailable",
+            "count": len(ships),
+            "provider": "aisstream",
+            "error_code": None,
+            "updated_at": _now,
+        },
+        "weather": {
+            "status": "live" if wx else "unavailable",
+            "count": len(wx),
+            "provider": "open_meteo",
+            "error_code": None,
+            "updated_at": _now,
+        },
+    }
+
     snap = {
         "meta": {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": _now,
             "forecast": {
                 "aircraft_count": forecast_counts(ac_hist),
                 "ships_count": forecast_counts(sh_hist),
@@ -220,6 +254,7 @@ async def build_snapshot(
             },
             "strategy": {},
         },
+        "sources": sources,
         "layers": layers_out,
         "alerts": alerts[:80],
         "correlations": correlations,
