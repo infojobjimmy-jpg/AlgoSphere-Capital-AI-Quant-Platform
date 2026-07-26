@@ -1,6 +1,9 @@
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
+
+import redis.asyncio as redis_async
 
 from app.config import settings
 from app.kafka_bus import KafkaBus, wait_for_kafka
@@ -13,6 +16,7 @@ from app.market.binance import fetch_crypto_top_binance as fetch_crypto_top
 from app.market.binance_ws import run_binance_ws_stream
 from app.market.finnhub import fetch_equity_sample
 from app.market.twelve_data import fetch_forex_sample
+from app.services import camera_pipeline as _cam_pipeline
 from app.services.camera_pipeline import fetch_cameras_for_telemetry
 from app.services.nhc_storms import fetch_active_storms
 
@@ -127,11 +131,20 @@ async def loop_market_equities(bus: KafkaBus) -> None:
 
 
 async def loop_cameras(bus: KafkaBus) -> None:
+    r = redis_async.from_url(settings.redis_url, decode_responses=True)
+    _sources_key = f"{settings.app_slug}:sources"
     while True:
         try:
             async with SessionLocal() as session:
                 cams = await fetch_cameras_for_telemetry(session)
             await emit(bus, "cameras", cams)
+            try:
+                raw = await r.get(_sources_key)
+                src = json.loads(raw) if raw else {}
+                src["cameras"] = dict(_cam_pipeline.camera_source_status)
+                await r.set(_sources_key, json.dumps(src))
+            except Exception:
+                logger.debug("sources redis write failed", exc_info=True)
         except Exception:
             logger.exception("camera pipeline failed")
             await emit(bus, "cameras", [])

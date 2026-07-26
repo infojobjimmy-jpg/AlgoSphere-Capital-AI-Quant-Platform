@@ -16,7 +16,7 @@ from app.agents.watcher import run_watcher
 from app.config import settings
 from app.fusion.event_engine import detect_events, events_to_dicts
 from app.learning.adaptive_thresholds import adapt_from_cycle, load_thresholds
-from app.services import camera_pipeline as _cam_pipeline
+import json as _json
 
 
 def forecast_counts(history: deque[int]) -> dict[str, float]:
@@ -205,8 +205,20 @@ async def build_snapshot(
             focus = None
 
     _now = datetime.now(timezone.utc).isoformat()
+    _src_raw = None
+    try:
+        _src_raw = await r.get(f"{settings.app_slug}:sources")
+    except Exception:
+        pass
+    _persisted_src: dict = _json.loads(_src_raw) if _src_raw else {}
     sources = {
-        "cameras": dict(_cam_pipeline.camera_source_status),
+        "cameras": _persisted_src.get("cameras") or {
+            "status": "live" if layers.get("cameras") else "unavailable",
+            "count": len(layers.get("cameras") or []),
+            "provider": "MTQ_WFS",
+            "error_code": None,
+            "updated_at": _now,
+        },
         "aircraft": {
             "status": "live" if aircraft else "unavailable",
             "count": len(aircraft),
