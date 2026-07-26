@@ -14,6 +14,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.config import settings
 from app.db.session import ensure_database
 from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social, webhooks
+from app.routers.analytics import ensure_visitor_sessions_table
 from app.services.whop_auth import configured as auth_configured, read_session
 from app.routers import navigation, self_code, system, trading
 from app.market_hub_bus import market_hub_broadcaster
@@ -45,6 +46,7 @@ async def redis_snapshot_poller() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ensure_database()
+    await ensure_visitor_sessions_table()
     poller = asyncio.create_task(redis_snapshot_poller())
     await market_hub_broadcaster.start()
     yield
@@ -83,6 +85,7 @@ async def protect_mutating_routes(request: Request, call_next):
             "/auth/logout",
             "/account/preferences",
             "/analytics/event",
+            "/analytics/heartbeat",
             "/social/profile",
             "/social/presence",
             "/social/connect",

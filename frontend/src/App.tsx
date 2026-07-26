@@ -7,6 +7,7 @@ import AccountPanel from "./components/subscriptions/AccountPanel";
 import SocialPanel from "./components/social/SocialPanel";
 import LanguageSelect from "./components/LanguageSelect";
 import { Language, savedLanguage, useInterfaceTranslation } from "./i18n";
+import { initHeartbeat, sendHeartbeat } from "./analytics";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -284,6 +285,15 @@ export default function App() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    initHeartbeat(() => window.location.pathname);
+    return () => { /* heartbeat stops naturally when tab closes */ };
+  }, []);
+
+  useEffect(() => {
+    sendHeartbeat(window.location.pathname);
+  }, [member]);
 
   useEffect(() => {
     localStorage.setItem("algosphere_lang", lang);
