@@ -31,6 +31,16 @@ class Settings(BaseSettings):
     owner_email: str = "infojobjimmy@gmail.com"
     owner_login_max_attempts: int = 5
     owner_login_window_seconds: int = 900
+    owner_otp_ttl_seconds: int = 600
+    owner_otp_request_cooldown_seconds: int = 60
+    owner_otp_max_attempts: int = 5
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
     navigation_osrm_base_url: str = "https://router.project-osrm.org"
     navigation_http_timeout_sec: float = 15.0
     tavily_api_key: str | None = None
