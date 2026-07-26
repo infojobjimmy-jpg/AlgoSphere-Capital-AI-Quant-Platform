@@ -156,9 +156,13 @@ async def websocket_live(ws: WebSocket) -> None:
                 continue
             if data.get("type") == "hello":
                 manager.set_compress(ws, bool(data.get("compress", True)))
-                await ws.send_json({"type": "hello_ack", "compress": bool(data.get("compress", True))})
+                # Do not send a JSON acknowledgement: the frontend stream accepts
+                # only snapshot payloads and must never be overwritten by control frames.
+                continue
             if data.get("type") == "ping":
-                await ws.send_json({"type": "pong"})
+                # Receiving the ping is enough to keep the application-level stream
+                # active. A JSON pong would be mistaken for a snapshot by older clients.
+                continue
     except WebSocketDisconnect:
         if not preview_only:
             manager.disconnect(ws)
