@@ -18,7 +18,7 @@ def public_preview(payload: dict) -> dict:
     }
     meta = dict(payload.get("meta") or {})
     meta["access"] = "preview"
-    return {"meta": meta, "layers": preview_layers, "alerts": []}
+    return {"meta": meta, "layers": preview_layers, "sources": payload.get("sources") or {}, "alerts": []}
 
 
 @router.get("/snapshot")
