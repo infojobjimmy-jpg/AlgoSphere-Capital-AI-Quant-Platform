@@ -24,12 +24,21 @@ type StrategySnap = {
   plan_created?: number;
 };
 
+type SourceStatus = {
+  status: "live" | "degraded" | "unavailable";
+  count: number;
+  provider: string;
+  error_code: string | null;
+  updated_at: string;
+};
+
 type Snapshot = {
   meta?: Record<string, unknown> & {
     strategy?: StrategySnap;
     cortex?: { loop?: string; agents?: string[]; phases?: Array<Record<string, unknown>> };
     evolution?: { guidance?: Record<string, unknown> };
   };
+  sources?: Record<string, SourceStatus>;
   layers?: Record<string, Array<Record<string, unknown>>>;
   alerts?: Array<Record<string, unknown>>;
   correlations?: Array<Record<string, unknown>>;
@@ -74,6 +83,21 @@ function colorForTempC(t: number | undefined): Cesium.Color {
 
 function availabilityCount(value: number, lang: Language): React.ReactNode {
   return value > 0 ? value : <span className="source-unavailable">{lang === "fr" ? "Indisponible" : "Unavailable"}</span>;
+}
+
+function SourceBadge({ src, lang }: { src: SourceStatus | undefined; lang: Language }): React.ReactElement | null {
+  if (!src) return null;
+  const { status, provider } = src;
+  const label = status === "live"
+    ? (lang === "fr" ? "En direct" : "Live")
+    : status === "degraded"
+      ? (lang === "fr" ? "Dégradé" : "Degraded")
+      : (lang === "fr" ? "Indisponible" : "Unavailable");
+  return (
+    <span className={`source-badge source-badge--${status}`} title={provider}>
+      {label}
+    </span>
+  );
 }
 
 function publicGeospatialText(value: unknown): string {
@@ -269,12 +293,13 @@ export default function App() {
 
   const counts = useMemo(() => {
     const layers = snap?.layers ?? {};
+    const src = snap?.sources ?? {};
     return {
-      aircraft: (layers.aircraft ?? []).length,
-      satellites: (layers.satellites ?? []).length,
-      ships: (layers.ships ?? []).length,
-      cameras: (layers.cameras ?? []).length,
-      weather: (layers.weather ?? []).length,
+      aircraft: src.aircraft?.count ?? (layers.aircraft ?? []).length,
+      satellites: src.satellites?.count ?? (layers.satellites ?? []).length,
+      ships: src.ships?.count ?? (layers.ships ?? []).length,
+      cameras: src.cameras?.count ?? (layers.cameras ?? []).length,
+      weather: src.weather?.count ?? (layers.weather ?? []).length,
       storms: (layers.storms ?? []).length,
       updated: String(snap?.meta?.updated_at ?? "—"),
     };
@@ -282,12 +307,15 @@ export default function App() {
 
   const unavailableSources = useMemo(() => {
     if (!snap) return [] as string[];
+    const src = snap?.sources ?? {};
+    const isUnavailable = (key: string, count: number) =>
+      src[key]?.status === "unavailable" || (!src[key] && count === 0);
     return [
-      [counts.aircraft, lang === "fr" ? "avions" : "aircraft"],
-      [counts.ships, lang === "fr" ? "navires" : "vessels"],
-      [counts.weather, lang === "fr" ? "météo" : "weather"],
-      [counts.cameras, lang === "fr" ? "caméras" : "cameras"],
-    ].filter(([count]) => Number(count) === 0).map(([, label]) => String(label));
+      [isUnavailable("aircraft", counts.aircraft), lang === "fr" ? "avions" : "aircraft"],
+      [isUnavailable("ships", counts.ships), lang === "fr" ? "navires" : "vessels"],
+      [isUnavailable("weather", counts.weather), lang === "fr" ? "météo" : "weather"],
+      [isUnavailable("cameras", counts.cameras), lang === "fr" ? "caméras" : "cameras"],
+    ].filter(([unavail]) => Boolean(unavail)).map(([, label]) => String(label));
   }, [counts, lang, snap]);
 
   const strategy = useMemo(() => (snap?.meta?.strategy ?? {}) as StrategySnap, [snap]);
@@ -1264,18 +1292,22 @@ export default function App() {
             <div className="stat">
               <label>{lang === "fr" ? "Avions" : "Aircraft"}</label>
               <strong>{availabilityCount(counts.aircraft, lang)}</strong>
+              <SourceBadge src={snap?.sources?.aircraft} lang={lang} />
             </div>
             <div className="stat">
               <label>Satellites</label>
               <strong>{availabilityCount(counts.satellites, lang)}</strong>
+              <SourceBadge src={snap?.sources?.satellites} lang={lang} />
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Navires" : "Ships"}</label>
               <strong>{availabilityCount(counts.ships, lang)}</strong>
+              <SourceBadge src={snap?.sources?.ships} lang={lang} />
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Météo" : "Weather"}</label>
               <strong>{availabilityCount(counts.weather, lang)}</strong>
+              <SourceBadge src={snap?.sources?.weather} lang={lang} />
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Tempêtes actives" : "Active storms"}</label>
@@ -1284,6 +1316,7 @@ export default function App() {
             <div className="stat">
               <label>{lang === "fr" ? "Caméras" : "Cameras"}</label>
               <strong>{availabilityCount(counts.cameras, lang)}</strong>
+              <SourceBadge src={snap?.sources?.cameras} lang={lang} />
             </div>
             <div className="stat">
               <label>{lang === "fr" ? "Mise à jour" : "Updated"}</label>
