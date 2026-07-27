@@ -20,3 +20,4 @@ python-multipart==0.0.17
 h3==4.1.1
 scikit-learn==1.5.2
 orjson==3.10.11
+whop-sdk[webhooks]==0.0.41
