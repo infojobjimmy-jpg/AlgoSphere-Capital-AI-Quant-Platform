@@ -49,11 +49,8 @@ async def whop_webhook(request: Request) -> dict:
     finally:
         await whop.close()
 
-    event_type = str(getattr(event, "type", "") or "")
-    if event_type not in _HANDLED_EVENTS:
-        return {"accepted": True, "action": "ignored"}
-
-    # Standard Webhooks: webhook-id is the canonical per-message idempotence key.
+    # Idempotence check applies to ALL events before type filtering so that
+    # re-delivered messages always return "duplicate" regardless of event type.
     webhook_id = request.headers.get("webhook-id", "")
     client = aioredis.from_url(settings.redis_url, decode_responses=True)
     try:
@@ -62,6 +59,10 @@ async def whop_webhook(request: Request) -> dict:
             if await client.exists(idem_key):
                 return {"accepted": True, "action": "duplicate"}
             await client.set(idem_key, "1", ex=86400 * 7)
+
+        event_type = str(getattr(event, "type", "") or "")
+        if event_type not in _HANDLED_EVENTS:
+            return {"accepted": True, "action": "ignored"}
 
         action = "noop"
 

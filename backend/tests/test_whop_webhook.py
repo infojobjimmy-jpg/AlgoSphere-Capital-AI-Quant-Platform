@@ -397,14 +397,26 @@ async def test_unknown_event_ignored(http):
 # ---------------------------------------------------------------------------
 
 async def test_duplicate_webhook_id_returns_duplicate(http, mock_redis):
+    # Use a handled event type so the idempotence key is checked before type filter.
     mock_redis.exists = AsyncMock(return_value=1)
-    body = _activated()
+    body = _refund()
     msg_id = f"msg_{uuid.uuid4().hex}"
     headers = _sign(body, msg_id=msg_id)
     r = await http.post(_ENDPOINT, content=body, headers=headers)
     assert r.status_code == 200, r.text
     assert r.json()["action"] == "duplicate"
     http._restore.assert_not_awaited()
+
+
+async def test_duplicate_unknown_event_also_deduplicated(http, mock_redis):
+    """Idempotence applies even to unknown event types (check is before type filter)."""
+    mock_redis.exists = AsyncMock(return_value=1)
+    body = _unknown_event()
+    msg_id = f"msg_{uuid.uuid4().hex}"
+    headers = _sign(body, msg_id=msg_id)
+    r = await http.post(_ENDPOINT, content=body, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["action"] == "duplicate"
 
 
 async def test_first_delivery_sets_idempotence_key(http, mock_redis):
