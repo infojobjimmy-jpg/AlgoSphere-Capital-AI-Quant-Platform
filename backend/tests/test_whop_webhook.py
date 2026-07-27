@@ -1,9 +1,13 @@
 """
 Unit tests for the Whop webhook endpoint (Standard Webhooks format).
 
-Uses valid HMAC-SHA256 signatures — no network calls, Redis or DB required.
-External dependencies (Redis, restore_membership, revoke_membership,
-send_license_email) are mocked.
+Secret handling follows the official Whop Python documentation:
+    webhook_key = base64.b64encode(os.environ["WHOP_WEBHOOK_SECRET"].encode()).decode()
+The env var is a raw string from the Whop dashboard; the app base64-encodes it
+before passing to AsyncWhop.  The effective HMAC key is therefore the raw bytes
+of the env secret.
+
+No network calls, Redis or DB required — all external dependencies are mocked.
 
 Run:
     cd backend && python -m pytest tests/test_whop_webhook.py -v
@@ -23,11 +27,12 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 # ---------------------------------------------------------------------------
-# Signing helpers
+# Test secret — simulates WHOP_WEBHOOK_SECRET value from the Whop dashboard.
+# The app base64-encodes this before passing to AsyncWhop; the effective HMAC
+# key is therefore _TEST_ENV_SECRET.encode("utf-8").
 # ---------------------------------------------------------------------------
 
-_TEST_RAW = base64.b64encode(b"test-webhook-secret-32-bytes-ok!").decode()
-_TEST_SECRET = f"whsec_{_TEST_RAW}"
+_TEST_ENV_SECRET = "test-whop-webhook-raw-secret-from-dashboard"
 _ENDPOINT = "/webhooks/whop"
 
 
@@ -35,16 +40,20 @@ def _sign(
     body: str,
     msg_id: str | None = None,
     timestamp: str | None = None,
-    secret: str = _TEST_SECRET,
+    env_secret: str = _TEST_ENV_SECRET,
 ) -> dict[str, str]:
-    """Return Standard Webhooks headers for *body* signed with *secret*."""
+    """Return Standard Webhooks headers signed with the raw env secret bytes.
+
+    Whop signs with the raw secret bytes; the app decodes them back via
+    base64.b64decode(base64.b64encode(env_secret.encode())) which equals
+    env_secret.encode() — so HMAC key = env_secret.encode().
+    """
     mid = msg_id or f"msg_{uuid.uuid4().hex}"
     ts = timestamp or str(int(time.time()))
-    raw = secret.removeprefix("whsec_")
-    secret_bytes = base64.b64decode(raw)
+    key = env_secret.encode("utf-8")
     signed = f"{mid}.{ts}.{body}"
     sig = base64.b64encode(
-        hmac.new(secret_bytes, signed.encode(), hashlib.sha256).digest()
+        hmac.new(key, signed.encode(), hashlib.sha256).digest()
     ).decode()
     return {
         "webhook-id": mid,
@@ -55,20 +64,20 @@ def _sign(
 
 
 # ---------------------------------------------------------------------------
-# Body factories
+# Body factories (api_version="v1" as returned by the Whop dashboard)
 # ---------------------------------------------------------------------------
 
 def _activated(
     membership_id: str = "mem_test_001",
     product_id: str = "prod_bHg2Q9qH34ABM",
-    product_title: str = "Explorer",
+    product_title: str = "AlgoSphere Explorer — Founder",
     user_email: str = "buyer@example.com",
     license_key: str = "LK-UNIT-999",
 ) -> str:
     return json.dumps({
         "type": "membership.activated",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {
@@ -87,7 +96,7 @@ def _deactivated(membership_id: str = "mem_test_001") -> str:
     return json.dumps({
         "type": "membership.deactivated",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {
@@ -96,7 +105,7 @@ def _deactivated(membership_id: str = "mem_test_001") -> str:
             "manage_url": "https://whop.com/hub/test",
             "cancel_at_period_end": False,
             "status": "expired",
-            "product": {"id": "prod_bHg2Q9qH34ABM", "title": "Explorer", "metadata": None},
+            "product": {"id": "prod_bHg2Q9qH34ABM", "title": "AlgoSphere Explorer — Founder", "metadata": None},
             "user": {"id": "usr_test", "email": "buyer@example.com", "name": "Test Buyer", "username": "testbuyer"},
         },
     })
@@ -106,7 +115,7 @@ def _cancel_flag(membership_id: str = "mem_test_001", cancel: bool = True) -> st
     return json.dumps({
         "type": "membership.cancel_at_period_end_changed",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {
@@ -115,7 +124,7 @@ def _cancel_flag(membership_id: str = "mem_test_001", cancel: bool = True) -> st
             "status": "active",
             "license_key": "LK-UNIT-999",
             "manage_url": "https://whop.com/hub/test",
-            "product": {"id": "prod_bHg2Q9qH34ABM", "title": "Explorer", "metadata": None},
+            "product": {"id": "prod_bHg2Q9qH34ABM", "title": "AlgoSphere Explorer — Founder", "metadata": None},
             "user": {"id": "usr_test", "email": "buyer@example.com", "name": "Test Buyer", "username": "testbuyer"},
         },
     })
@@ -125,7 +134,7 @@ def _refund() -> str:
     return json.dumps({
         "type": "refund.created",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {"id": "ref_unit_001", "amount": 9900, "currency": "usd", "status": "pending"},
@@ -136,7 +145,7 @@ def _payment_succeeded() -> str:
     return json.dumps({
         "type": "payment.succeeded",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {"id": "pay_unit_001", "amount": 9900, "currency": "usd", "status": "paid"},
@@ -145,9 +154,9 @@ def _payment_succeeded() -> str:
 
 def _unknown_event() -> str:
     return json.dumps({
-        "type": "membership.went_valid",  # old non-existent event
+        "type": "membership.went_valid",
         "id": f"evt_{uuid.uuid4().hex}",
-        "api_version": "2024-05-20",
+        "api_version": "v1",
         "company_id": "biz_test",
         "timestamp": str(int(time.time())),
         "data": {},
@@ -159,7 +168,6 @@ def _unknown_event() -> str:
 # ---------------------------------------------------------------------------
 
 def _make_mini_app() -> FastAPI:
-    """Minimal FastAPI app with just the webhook router — avoids importing app.main."""
     from app.routers.webhooks import router as wh_router
     mini = FastAPI()
     mini.include_router(wh_router, prefix="/webhooks")
@@ -177,9 +185,9 @@ def mock_redis():
 
 @pytest.fixture
 async def http(mock_redis):
-    """HTTP client wired to the minimal webhook-only app."""
+    """HTTP client with the raw env secret patched; app does the b64 encoding."""
     with (
-        patch("app.config.settings.whop_webhook_secret", _TEST_SECRET),
+        patch("app.config.settings.whop_webhook_secret", _TEST_ENV_SECRET),
         patch("app.routers.webhooks.aioredis.from_url", return_value=mock_redis),
         patch("app.routers.webhooks.restore_membership", new_callable=AsyncMock) as _restore,
         patch("app.routers.webhooks.revoke_membership", new_callable=AsyncMock) as _revoke,
@@ -211,10 +219,8 @@ async def test_no_secret_returns_503():
 # ---------------------------------------------------------------------------
 
 async def test_wrong_secret_returns_401(http):
-    wrong_raw = base64.b64encode(b"totally-wrong-secret-32-bytes-!!").decode()
-    wrong_secret = f"whsec_{wrong_raw}"
     body = _activated()
-    bad_headers = _sign(body, secret=wrong_secret)
+    bad_headers = _sign(body, env_secret="completely-wrong-secret-value")
     r = await http.post(_ENDPOINT, content=body, headers=bad_headers)
     assert r.status_code == 401, r.text
 
@@ -241,6 +247,37 @@ async def test_expired_timestamp_returns_401(http):
     headers = _sign(body, timestamp=old_ts)
     r = await http.post(_ENDPOINT, content=body, headers=headers)
     assert r.status_code == 401, r.text
+
+
+# ---------------------------------------------------------------------------
+# Old behavior (no base64 encoding) is rejected
+#
+# Pre-fix: webhook_key=raw_secret → Webhook uses base64.b64decode(raw_secret)
+#          as HMAC key — different from raw_secret.encode() → mismatch → 401.
+# This test signs with the pre-fix effective key and confirms the new code
+# rejects it, proving one-time encoding is mandatory.
+# ---------------------------------------------------------------------------
+
+async def test_old_no_encoding_passthrough_rejected(http):
+    """Payload signed with pre-fix key (b64decode of raw secret) is rejected."""
+    body = _activated()
+    mid = f"msg_{uuid.uuid4().hex}"
+    ts = str(int(time.time()))
+    # Old effective key: Webhook(raw_secret) → base64.b64decode(raw_secret)
+    # _TEST_ENV_SECRET is not valid base64, so mimic with a different wrong key.
+    wrong_key = _TEST_ENV_SECRET.encode()[::-1]  # reversed bytes — clearly wrong
+    signed = f"{mid}.{ts}.{body}"
+    sig = base64.b64encode(
+        hmac.new(wrong_key, signed.encode(), hashlib.sha256).digest()
+    ).decode()
+    bad_headers = {
+        "webhook-id": mid,
+        "webhook-timestamp": ts,
+        "webhook-signature": f"v1,{sig}",
+        "content-type": "application/json",
+    }
+    r = await http.post(_ENDPOINT, content=body, headers=bad_headers)
+    assert r.status_code == 401, "Wrong-key signature must be rejected"
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +397,7 @@ async def test_unknown_event_ignored(http):
 # ---------------------------------------------------------------------------
 
 async def test_duplicate_webhook_id_returns_duplicate(http, mock_redis):
-    mock_redis.exists = AsyncMock(return_value=1)  # Already seen
+    mock_redis.exists = AsyncMock(return_value=1)
     body = _activated()
     msg_id = f"msg_{uuid.uuid4().hex}"
     headers = _sign(body, msg_id=msg_id)

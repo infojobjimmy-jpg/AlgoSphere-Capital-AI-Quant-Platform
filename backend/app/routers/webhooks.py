@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 
 import redis.asyncio as aioredis
@@ -31,9 +32,14 @@ async def whop_webhook(request: Request) -> dict:
 
     from whop_sdk import AsyncWhop
 
+    raw_webhook_secret = settings.whop_webhook_secret.strip()
+    encoded_webhook_secret = base64.b64encode(
+        raw_webhook_secret.encode("utf-8")
+    ).decode("ascii")
+
     whop = AsyncWhop(
         api_key=settings.whop_api_key or "",
-        webhook_key=settings.whop_webhook_secret,
+        webhook_key=encoded_webhook_secret,
     )
     try:
         event = whop.webhooks.unwrap(payload_str, headers=dict(request.headers))
