@@ -73,8 +73,12 @@ ALTER TABLE visitor_sessions ADD COLUMN IF NOT EXISTS consent         TEXT    NO
 async def ensure_visitor_sessions_table() -> None:
     from app.db.session import SessionLocal, ensure_database
     await ensure_database()
+    # asyncpg rejects multi-statement strings in a single execute() call.
+    # Split on ";" and execute each non-empty statement individually.
+    statements = [s.strip() for s in _VISITOR_SESSIONS_DDL.split(";") if s.strip()]
     async with SessionLocal() as session:
-        await session.execute(text(_VISITOR_SESSIONS_DDL))
+        for stmt in statements:
+            await session.execute(text(stmt))
         await session.commit()
 
 
