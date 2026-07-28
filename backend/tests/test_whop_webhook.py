@@ -179,20 +179,28 @@ def mock_redis():
     client = AsyncMock()
     client.exists = AsyncMock(return_value=0)
     client.set = AsyncMock(return_value=True)
+    client.get = AsyncMock(return_value=None)   # lock token not found → no delete (fine for tests)
+    client.delete = AsyncMock(return_value=1)
     client.aclose = AsyncMock()
     return client
 
 
 @pytest.fixture
 async def http(mock_redis):
-    """HTTP client with the raw env secret patched; app does the b64 encoding."""
+    """HTTP client patched at the fulfillment-service layer.
+
+    fulfill_membership() in whop_fulfillment is exercised for real; its
+    internal helpers (is_fulfilled, send_license_email, record_fulfillment)
+    are mocked so no DB or SMTP is needed.
+    """
     with (
         patch("app.config.settings.whop_webhook_secret", _TEST_ENV_SECRET),
         patch("app.routers.webhooks.aioredis.from_url", return_value=mock_redis),
         patch("app.routers.webhooks.restore_membership", new_callable=AsyncMock) as _restore,
         patch("app.routers.webhooks.revoke_membership", new_callable=AsyncMock) as _revoke,
-        patch("app.routers.webhooks.send_license_email", new_callable=AsyncMock) as _mail,
-        patch("app.routers.webhooks.record_fulfillment", new_callable=AsyncMock) as _fulfill,
+        patch("app.services.whop_fulfillment.is_fulfilled", new_callable=AsyncMock, return_value=False),
+        patch("app.services.whop_fulfillment.send_license_email", new_callable=AsyncMock) as _mail,
+        patch("app.services.whop_fulfillment.record_fulfillment", new_callable=AsyncMock) as _fulfill,
     ):
         app = _make_mini_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -426,6 +434,8 @@ async def test_first_delivery_sets_idempotence_key(http, mock_redis):
     msg_id = f"msg_{uuid.uuid4().hex}"
     headers = _sign(body, msg_id=msg_id)
     await http.post(_ENDPOINT, content=body, headers=headers)
-    mock_redis.set.assert_awaited_once()
-    call_kwargs = mock_redis.set.call_args
-    assert "webhook:seen:" in str(call_kwargs)
+    # set is called at least twice: once for the webhook idempotence key, once
+    # for the fulfill_membership lock — verify the idempotence call is present.
+    mock_redis.set.assert_awaited()
+    all_calls = str(mock_redis.set.call_args_list)
+    assert "webhook:seen:" in all_calls

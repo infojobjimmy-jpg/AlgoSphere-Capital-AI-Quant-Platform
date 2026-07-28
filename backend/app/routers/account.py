@@ -9,9 +9,12 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.services.license_email import send_license_email
 from app.services.whop_auth import ACTIVE_STATUSES, current_member
-from app.services.whop_fulfillment import is_fulfilled, record_fulfillment
+from app.services.whop_fulfillment import (
+    fulfill_membership,
+    membership_product_id,
+    membership_user_email,
+)
 
 logger = logging.getLogger("acap.account")
 
@@ -79,11 +82,10 @@ async def resend_welcome(body: ResendWelcomeBody, request: Request) -> dict:
         raise HTTPException(status_code=502, detail="Whop API unavailable")
 
     m = resp.json()
-    product_id = str(m.get("product") or m.get("access_pass") or "")
+    product_id = membership_product_id(m)
     status = str(m.get("status") or "").lower()
-    user_email = str(m.get("email") or "")
+    user_email = membership_user_email(m)
     license_key = str(m.get("license_key") or "")
-    manage_url = str(m.get("manage_url") or "https://whop.com/@me/settings/orders/")
 
     allowed = {x.strip() for x in settings.whop_allowed_product_ids.split(",") if x.strip()}
     if allowed and product_id not in allowed:
@@ -98,27 +100,28 @@ async def resend_welcome(body: ResendWelcomeBody, request: Request) -> dict:
     if not license_key:
         raise HTTPException(status_code=422, detail="No license key on this membership")
 
-    # Idempotence guard
-    already_sent = await is_fulfilled(membership_id)
-    if already_sent and not body.force:
+    source = "owner_resend_force" if body.force else "owner_resend"
+
+    redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        sent, reason = await fulfill_membership(
+            membership_id, m, settings.whop_api_key or "", redis_client, source, force=body.force
+        )
+    finally:
+        await redis_client.aclose()
+
+    if reason == "already_fulfilled":
         return {"membership_id": masked, "action": "already_sent", "license_returned": False}
 
-    # Fetch product title
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        pr = await client.get(
-            f"https://api.whop.com/api/v1/products/{product_id}",
-            headers={"Authorization": f"Bearer {settings.whop_api_key}"},
-        )
-    product_title = pr.json().get("title") or settings.product_name if pr.status_code == 200 else settings.product_name
+    if reason == "lock_held":
+        raise HTTPException(status_code=409, detail="Another fulfillment is in progress")
 
-    source = "owner_resend_force" if (body.force and already_sent) else "owner_resend"
-    if body.force and already_sent:
+    if not sent:
+        raise HTTPException(status_code=500, detail=f"Fulfillment failed: {reason}")
+
+    if body.force:
         logger.warning("account: owner forced resend for %s", masked)
-
-    await send_license_email(user_email, product_title, license_key, manage_url)
-    await record_fulfillment(membership_id, product_id, status, source, sent=True)
     logger.info("account: resend-welcome sent for %s by owner (force=%s)", masked, body.force)
-
     return {"membership_id": masked, "action": "sent", "license_returned": False}
 
 

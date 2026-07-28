@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -96,11 +97,7 @@ async def record_fulfillment(
 
 
 async def seed_initial_fulfillments() -> None:
-    """Insert pre-fulfilled membership IDs from WHOP_FULFILLMENT_SEEDED_IDS config.
-
-    Called at startup so the reconciliation poller never re-sends welcome emails
-    for memberships that were handled manually before the poller was deployed.
-    """
+    """Insert pre-fulfilled membership IDs from WHOP_FULFILLMENT_SEEDED_IDS config."""
     seeded = [x.strip() for x in settings.whop_fulfillment_seeded_ids.split(",") if x.strip()]
     if not seeded:
         return
@@ -118,7 +115,116 @@ async def seed_initial_fulfillments() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Reconciliation poller
+# Schema helpers — Whop v2 API returns nested objects
+# ---------------------------------------------------------------------------
+
+def membership_product_id(m: dict) -> str:
+    """Extract product ID from a Whop v2 membership dict (nested or flat fallback)."""
+    product = m.get("product")
+    if isinstance(product, dict):
+        return str(product.get("id") or "")
+    if isinstance(product, str):
+        return product
+    access_pass = m.get("access_pass")
+    if isinstance(access_pass, dict):
+        return str(access_pass.get("id") or "")
+    return str(access_pass or "")
+
+
+def membership_product_title(m: dict) -> str:
+    """Extract product title from a Whop v2 membership dict."""
+    product = m.get("product")
+    if isinstance(product, dict):
+        return str(product.get("title") or "")
+    return ""
+
+
+def membership_user_email(m: dict) -> str:
+    """Extract user email from a Whop v2 membership dict (nested or flat fallback)."""
+    user = m.get("user")
+    if isinstance(user, dict):
+        return str(user.get("email") or "")
+    return str(m.get("email") or "")
+
+
+# ---------------------------------------------------------------------------
+# Shared fulfillment function
+# ---------------------------------------------------------------------------
+
+async def fulfill_membership(
+    membership_id: str,
+    m: dict,
+    api_key: str,
+    redis_client: aioredis.Redis,
+    source: str,
+    *,
+    force: bool = False,
+) -> tuple[bool, str]:
+    """Send welcome email exactly once (or once when forced).
+
+    Returns (sent, reason).
+    Uses Redis NX lock with random token to prevent concurrent duplicate sends.
+    Token-verified release prevents split-brain on lock expiry.
+    """
+    masked = (membership_id[:8] + "***") if len(membership_id) > 8 else membership_id
+
+    if not force and await is_fulfilled(membership_id):
+        return False, "already_fulfilled"
+
+    lock_key = f"{settings.app_slug}:fulfillment:lock:{membership_id}"
+    lock_token = secrets.token_hex(16)
+    acquired = await redis_client.set(lock_key, lock_token, nx=True, ex=300)
+    if not acquired:
+        logger.debug("fulfillment: lock held for %s — skipping", masked)
+        return False, "lock_held"
+
+    try:
+        if not force and await is_fulfilled(membership_id):
+            return False, "already_fulfilled"
+
+        product_id = membership_product_id(m)
+        status = str(m.get("status") or "").lower()
+        user_email = membership_user_email(m)
+        license_key = str(m.get("license_key") or "")
+        manage_url = str(m.get("manage_url") or "https://whop.com/@me/settings/orders/")
+
+        if not user_email:
+            logger.warning("fulfillment: no email for %s", masked)
+            await record_fulfillment(membership_id, product_id, status, source, error="no_email")
+            return False, "no_email"
+
+        if not license_key:
+            logger.warning("fulfillment: no license_key for %s", masked)
+            await record_fulfillment(membership_id, product_id, status, source, error="no_license_key")
+            return False, "no_license_key"
+
+        product_title = membership_product_title(m) or await _get_product_title(api_key, product_id)
+
+        await send_license_email(user_email, product_title, license_key, manage_url)
+        await record_fulfillment(membership_id, product_id, status, source, sent=True)
+        logger.info("fulfillment: welcome email sent for %s (%s)", masked, source)
+        return True, "sent"
+
+    except Exception as exc:
+        logger.exception("fulfillment: error for %s: %s", masked, type(exc).__name__)
+        try:
+            await record_fulfillment(
+                membership_id, membership_product_id(m),
+                str(m.get("status") or "").lower(), source,
+                error=type(exc).__name__,
+            )
+        except Exception:
+            pass
+        return False, f"error:{type(exc).__name__}"
+
+    finally:
+        current = await redis_client.get(lock_key)
+        if current == lock_token:
+            await redis_client.delete(lock_key)
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation poller helpers
 # ---------------------------------------------------------------------------
 
 _PRODUCT_TITLE_CACHE: dict[str, str] = {}
@@ -143,13 +249,23 @@ async def _get_product_title(api_key: str, product_id: str) -> str:
 
 
 async def _fetch_recent_memberships(api_key: str, after_ts: int) -> list[dict[str, Any]]:
+    """Fetch memberships from Whop v2 API and return those matching the criteria.
+
+    Uses company_id and first=100 (not limit=100).
+    Does NOT stop pagination when an old membership is found — the list may be
+    unsorted, so every page is fully scanned before the cutoff check.
+    """
     allowed = {x.strip() for x in settings.whop_allowed_product_ids.split(",") if x.strip()}
     results: list[dict[str, Any]] = []
     cursor: str | None = None
+    pages_fetched = 0
+    max_pages = settings.whop_reconciliation_max_pages
 
     async with httpx.AsyncClient(timeout=20.0) as client:
-        while True:
-            params: dict[str, str] = {"limit": "100"}
+        while pages_fetched < max_pages:
+            params: dict[str, str] = {"first": "100"}
+            if settings.whop_company_id:
+                params["company_id"] = settings.whop_company_id
             if cursor:
                 params["after"] = cursor
 
@@ -164,11 +280,11 @@ async def _fetch_recent_memberships(api_key: str, after_ts: int) -> list[dict[st
 
             data = resp.json()
             memberships = data.get("data", []) or []
+            pages_fetched += 1
 
             if not memberships:
                 break
 
-            reached_cutoff = False
             for m in memberships:
                 created_ts = m.get("created_at") or 0
                 if isinstance(created_ts, str):
@@ -180,10 +296,9 @@ async def _fetch_recent_memberships(api_key: str, after_ts: int) -> list[dict[st
                         created_ts = 0
 
                 if created_ts < after_ts:
-                    reached_cutoff = True
-                    break
+                    continue  # skip old memberships; do NOT break (list may be unsorted)
 
-                product_id = str(m.get("product") or m.get("access_pass") or "")
+                product_id = membership_product_id(m)
                 if product_id not in allowed:
                     continue
 
@@ -192,9 +307,6 @@ async def _fetch_recent_memberships(api_key: str, after_ts: int) -> list[dict[st
                     continue
 
                 results.append(m)
-
-            if reached_cutoff:
-                break
 
             page_info = data.get("page_info") or {}
             if not page_info.get("has_next_page"):
@@ -212,54 +324,14 @@ async def _process_one(
     membership_id = str(m.get("id") or "")
     if not membership_id:
         return
-
-    masked = membership_id[:8] + "***"
-    product_id = str(m.get("product") or m.get("access_pass") or "")
-    status = str(m.get("status") or "").lower()
-
     try:
-        if await is_fulfilled(membership_id):
-            return
-
-        lock_key = f"{settings.app_slug}:fulfillment:lock:{membership_id}"
-        acquired = await redis_client.set(lock_key, "1", nx=True, ex=300)
-        if not acquired:
-            return
-
-        # Double-check after acquiring lock
-        if await is_fulfilled(membership_id):
-            return
-
-        user_email = str(m.get("email") or "")
-        license_key = str(m.get("license_key") or "")
-        manage_url = str(m.get("manage_url") or "https://whop.com/@me/settings/orders/")
-
-        await record_fulfillment(membership_id, product_id, status, "reconciliation")
-
-        if not user_email:
-            logger.warning("fulfillment: no email for %s", masked)
-            await record_fulfillment(membership_id, product_id, status, "reconciliation", error="no_email")
-            return
-
-        if not license_key:
-            logger.warning("fulfillment: no license_key for %s", masked)
-            await record_fulfillment(membership_id, product_id, status, "reconciliation", error="no_license_key")
-            return
-
-        product_title = await _get_product_title(api_key, product_id)
-        await send_license_email(user_email, product_title, license_key, manage_url)
-        await record_fulfillment(membership_id, product_id, status, "reconciliation", sent=True)
-        logger.info("fulfillment: welcome email sent for %s (reconciliation)", masked)
-
+        await fulfill_membership(membership_id, m, api_key, redis_client, "reconciliation")
     except Exception as exc:
-        logger.exception("fulfillment: error processing %s: %s", masked, type(exc).__name__)
-        try:
-            await record_fulfillment(
-                membership_id, product_id, status, "reconciliation",
-                error=type(exc).__name__,
-            )
-        except Exception:
-            pass
+        logger.exception(
+            "fulfillment: unhandled error for %s: %s",
+            membership_id[:8] + "***",
+            type(exc).__name__,
+        )
 
 
 async def _reconcile_once(redis_client: aioredis.Redis) -> None:
