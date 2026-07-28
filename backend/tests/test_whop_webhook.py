@@ -192,12 +192,14 @@ async def http(mock_redis):
         patch("app.routers.webhooks.restore_membership", new_callable=AsyncMock) as _restore,
         patch("app.routers.webhooks.revoke_membership", new_callable=AsyncMock) as _revoke,
         patch("app.routers.webhooks.send_license_email", new_callable=AsyncMock) as _mail,
+        patch("app.routers.webhooks.record_fulfillment", new_callable=AsyncMock) as _fulfill,
     ):
         app = _make_mini_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             client._restore = _restore
             client._revoke = _revoke
             client._mail = _mail
+            client._fulfill = _fulfill
             yield client
 
 

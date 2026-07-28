@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.config import settings
 from app.services.license_email import send_license_email
 from app.services.whop_auth import restore_membership, revoke_membership
+from app.services.whop_fulfillment import record_fulfillment
 
 logger = logging.getLogger("acap.webhooks")
 router = APIRouter()
@@ -93,10 +94,20 @@ async def whop_webhook(request: Request) -> dict:
                 if user_email and license_key:
                     try:
                         await send_license_email(user_email, product_title, license_key, manage_url)
+                        await record_fulfillment(
+                            membership_id, product_id, "active", "webhook", sent=True
+                        )
                     except Exception:
                         logger.exception("webhook: failed to send welcome email")
+                        await record_fulfillment(
+                            membership_id, product_id, "active", "webhook",
+                            error="email_send_failed",
+                        )
                 elif not license_key:
                     logger.error("webhook: membership activated but license_key absent — welcome email not sent")
+                    await record_fulfillment(
+                        membership_id, product_id, "active", "webhook", error="no_license_key"
+                    )
 
             elif event_type == "membership.deactivated":
                 if membership_id:

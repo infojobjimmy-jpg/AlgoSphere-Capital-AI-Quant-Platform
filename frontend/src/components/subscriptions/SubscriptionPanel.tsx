@@ -29,13 +29,13 @@ export default function SubscriptionPanel({ lang, onClose }: Props) {
   const checkoutUrls: Record<string, string | undefined> = {
     explorer:
       import.meta.env.VITE_WHOP_EXPLORER_URL ||
-      "https://whop.com/algosphere-ia-lab/algosphere-explorer-founder",
+      "https://whop.com/checkout/plan_Stwbmp2VLfdU9",
     pro:
       import.meta.env.VITE_WHOP_PRO_URL ||
-      "https://whop.com/algosphere-ia-lab/algosphere-pro-founder",
+      "https://whop.com/checkout/plan_zEr9gPt4JYPQI",
     business:
       import.meta.env.VITE_WHOP_BUSINESS_URL ||
-      "https://whop.com/algosphere-ia-lab/algosphere-business-pilot",
+      "https://whop.com/checkout/plan_Yhg4vuDRwOGbg",
   };
   const fr = lang === "fr";
 

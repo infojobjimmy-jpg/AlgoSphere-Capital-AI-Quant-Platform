@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     whop_plan_explorer_ids: str = ""
     whop_plan_pro_ids: str = ""
     whop_plan_business_ids: str = ""
+    whop_reconciliation_start_ts: int = 0
+    whop_fulfillment_seeded_ids: str = ""
     auth_session_secret: str | None = None
     auth_session_hours: int = 168
     auth_remember_me_days: int = 30

@@ -16,6 +16,11 @@ from app.db.session import ensure_database
 from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social, webhooks
 from app.routers.analytics import ensure_visitor_sessions_table
 from app.services.whop_auth import configured as auth_configured, read_session
+from app.services.whop_fulfillment import (
+    ensure_whop_fulfillment_table,
+    seed_initial_fulfillments,
+    whop_reconciliation_poller,
+)
 from app.routers import navigation, self_code, system, trading
 from app.market_hub_bus import market_hub_broadcaster
 from app.websocket_manager import ConnectionManager
@@ -47,15 +52,19 @@ async def redis_snapshot_poller() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ensure_database()
     await ensure_visitor_sessions_table()
+    await ensure_whop_fulfillment_table()
+    await seed_initial_fulfillments()
     poller = asyncio.create_task(redis_snapshot_poller())
+    reconciler = asyncio.create_task(whop_reconciliation_poller())
     await market_hub_broadcaster.start()
     yield
     await market_hub_broadcaster.stop()
-    poller.cancel()
-    try:
-        await poller
-    except asyncio.CancelledError:
-        pass
+    for task in (poller, reconciler):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Algosphere Capital API", version="1.0.0", lifespan=lifespan)
@@ -84,6 +93,7 @@ async def protect_mutating_routes(request: Request, call_next):
             "/auth/owner/change-code",
             "/auth/logout",
             "/account/preferences",
+            "/account/resend-welcome",
             "/analytics/event",
             "/analytics/heartbeat",
             "/social/profile",
