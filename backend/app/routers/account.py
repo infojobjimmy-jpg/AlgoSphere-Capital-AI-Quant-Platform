@@ -5,11 +5,11 @@ import logging
 
 import httpx
 import redis.asyncio as redis
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.services.whop_auth import ACTIVE_STATUSES, current_member
+from app.services.whop_auth import ACTIVE_STATUSES, current_member, require_active_member
 from app.services.whop_fulfillment import (
     fulfill_membership,
     membership_product_id,
@@ -26,21 +26,13 @@ class Preferences(BaseModel):
     alerts: list[dict] = Field(default_factory=list, max_length=50)
 
 
-def _member(request: Request) -> dict:
-    member = current_member(request)
-    if not member:
-        raise HTTPException(status_code=401, detail="Active subscription required")
-    return member
-
-
 def _key(member: dict) -> str:
     identity = member.get("user_id") or member.get("membership_id")
     return f"{settings.app_slug}:member:{identity}:preferences"
 
 
 @router.get("/preferences")
-async def get_preferences(request: Request) -> dict:
-    member = _member(request)
+async def get_preferences(member: dict = Depends(require_active_member)) -> dict:
     client = redis.from_url(settings.redis_url, decode_responses=True)
     try:
         raw = await client.get(_key(member))
@@ -126,8 +118,7 @@ async def resend_welcome(body: ResendWelcomeBody, request: Request) -> dict:
 
 
 @router.post("/preferences")
-async def save_preferences(body: Preferences, request: Request) -> dict:
-    member = _member(request)
+async def save_preferences(body: Preferences, member: dict = Depends(require_active_member)) -> dict:
     payload = body.model_dump()
     client = redis.from_url(settings.redis_url, decode_responses=True)
     try:

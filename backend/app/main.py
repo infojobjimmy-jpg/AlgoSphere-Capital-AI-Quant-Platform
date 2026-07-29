@@ -15,7 +15,7 @@ from app.config import settings
 from app.db.session import ensure_database
 from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social, webhooks
 from app.routers.analytics import ensure_visitor_sessions_table
-from app.services.whop_auth import configured as auth_configured, read_session
+from app.services.whop_auth import configured as auth_configured, is_membership_revoked, read_session
 from app.services.whop_fulfillment import (
     ensure_whop_fulfillment_table,
     seed_initial_fulfillments,
@@ -154,6 +154,18 @@ async def websocket_market_hub(ws: WebSocket) -> None:
 @app.websocket("/ws/live")
 async def websocket_live(ws: WebSocket) -> None:
     member = read_session(ws.cookies.get("algosphere_session"))
+    if member and member.get("role") != "owner":
+        membership_id = member.get("membership_id", "")
+        if membership_id:
+            import redis.asyncio as _redis
+            _rc = _redis.from_url(settings.redis_url, decode_responses=True)
+            try:
+                if await is_membership_revoked(_rc, membership_id):
+                    member = None
+            except Exception:
+                member = None  # fail-safe: no silent access when Redis unavailable
+            finally:
+                await _rc.aclose()
     preview_only = auth_configured() and member is None
     if preview_only:
         await ws.accept()

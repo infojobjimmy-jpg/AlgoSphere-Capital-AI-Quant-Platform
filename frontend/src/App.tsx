@@ -270,6 +270,16 @@ export default function App() {
     return liveSnap;
   }, [liveSnap, replayFrames, replayEnabled, replayIdx]);
 
+  const clearAuth = useCallback(() => {
+    setMember(null);
+    setShowAccount(false);
+    setShowSocial(false);
+    setShowGpsPanel(false);
+    setShowMemberAccess(true);
+    sessionStorage.removeItem("acap_vsid");
+    sessionStorage.removeItem("acap_vid");
+  }, []);
+
   useEffect(() => {
     let active = true;
     fetch(`${apiBase}/auth/status`, { credentials: "same-origin" })
@@ -278,13 +288,51 @@ export default function App() {
         if (!active) return;
         setAuthConfigured(Boolean(payload.configured));
         setOwnerAccessConfigured(Boolean(payload.owner_access_configured));
-        setMember(payload.authenticated ? (payload.member ?? {}) : null);
+        if (!payload.authenticated) {
+          setMember(null);
+        } else {
+          setMember(payload.member ?? {});
+        }
       })
       .catch(() => {
         if (active) setAuthConfigured(false);
       });
     return () => { active = false; };
   }, []);
+
+  // Re-check revocation status on tab focus and every 2 minutes for non-owner members.
+  // Uses a ref so the interval/listener doesn't need to re-register when member changes.
+  const memberRef = useRef<Record<string, unknown> | null>(null);
+  useEffect(() => { memberRef.current = member; }, [member]);
+
+  useEffect(() => {
+    const checkRevocation = () => {
+      const m = memberRef.current;
+      if (!m || m.role === "owner") return;
+      fetch(`${apiBase}/auth/status`, { credentials: "same-origin" })
+        .then((r) => r.json())
+        .then((payload) => {
+          if (!payload.authenticated) clearAuth();
+        })
+        .catch(() => {});
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") checkRevocation();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = window.setInterval(checkRevocation, 120_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(interval);
+    };
+  }, [clearAuth]);
+
+  // Allow any component to signal auth revocation via a custom event.
+  useEffect(() => {
+    const onRevoked = () => clearAuth();
+    window.addEventListener("algosphere-auth-revoked", onRevoked);
+    return () => window.removeEventListener("algosphere-auth-revoked", onRevoked);
+  }, [clearAuth]);
 
   useEffect(() => {
     initHeartbeat(() => window.location.pathname);

@@ -6,11 +6,18 @@ import secrets
 
 import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.services.owner_email import delivery_configured, masked_owner_email, send_owner_code
-from app.services.whop_auth import configured, create_session, current_member, validate_license
+from app.services.whop_auth import (
+    configured,
+    create_session,
+    current_member,
+    is_membership_revoked,
+    validate_license,
+)
 
 router = APIRouter()
 
@@ -91,10 +98,28 @@ def _set_owner_session(response: Response, remember_me: bool = True) -> dict:
 
 
 @router.get("/status")
-async def status(request: Request) -> dict:
+async def status(request: Request, response: Response) -> dict:
     member = current_member(request)
     email_ready = delivery_configured()
     permanent_ready = bool(settings.owner_access_code and settings.auth_session_secret)
+
+    if member and member.get("role") != "owner":
+        membership_id = member.get("membership_id", "")
+        if membership_id:
+            client = redis.from_url(settings.redis_url, decode_responses=True)
+            try:
+                revoked = await is_membership_revoked(client, membership_id)
+            except Exception:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Auth verification temporarily unavailable",
+                )
+            finally:
+                await client.aclose()
+            if revoked:
+                response.delete_cookie("algosphere_session", path="/")
+                member = None
+
     return {
         "configured": configured(),
         "owner_access_configured": bool(email_ready or permanent_ready),
@@ -107,10 +132,30 @@ async def status(request: Request) -> dict:
 
 
 @router.get("/me")
-async def me(request: Request) -> dict:
+async def me(request: Request, response: Response) -> dict:
     member = current_member(request)
     if not member:
         raise HTTPException(status_code=401, detail="Subscription required")
+    if member.get("role") != "owner":
+        membership_id = member.get("membership_id", "")
+        if membership_id:
+            client = redis.from_url(settings.redis_url, decode_responses=True)
+            try:
+                revoked = await is_membership_revoked(client, membership_id)
+            except Exception:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Auth verification temporarily unavailable",
+                )
+            finally:
+                await client.aclose()
+            if revoked:
+                err = JSONResponse(
+                    status_code=403,
+                    content={"detail": "Your subscription has been canceled or revoked"},
+                )
+                err.delete_cookie("algosphere_session", path="/")
+                return err
     return {"authenticated": True, "member": member}
 
 
