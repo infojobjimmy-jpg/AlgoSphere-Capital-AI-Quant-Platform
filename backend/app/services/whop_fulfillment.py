@@ -18,6 +18,29 @@ from app.services.whop_auth import ACTIVE_STATUSES
 
 logger = logging.getLogger("acap.fulfillment")
 
+_RELEASE_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
+
+
+async def release_lock(
+    redis_client: aioredis.Redis, lock_key: str, lock_token: str
+) -> None:
+    """Atomically release a Redis NX lock iff the stored token matches.
+
+    Uses a Lua script so compare-and-delete is a single atomic operation.
+    Any error during release is logged and silently swallowed — it must
+    never mask the caller's return value.  The lock token is never logged.
+    """
+    try:
+        await redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)
+    except Exception:
+        logger.warning("fulfillment: lock release failed for key %s (ignored)", lock_key)
+
 _FULFILLMENT_DDL = """
 CREATE TABLE IF NOT EXISTS whop_fulfillment (
     membership_id TEXT PRIMARY KEY,
@@ -218,9 +241,7 @@ async def fulfill_membership(
         return False, f"error:{type(exc).__name__}"
 
     finally:
-        current = await redis_client.get(lock_key)
-        if current == lock_token:
-            await redis_client.delete(lock_key)
+        await release_lock(redis_client, lock_key, lock_token)
 
 
 # ---------------------------------------------------------------------------
