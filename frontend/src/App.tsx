@@ -1487,44 +1487,55 @@ export default function App() {
             </div>
           </div>
 
-          <div className="row">
-            <label className="toggle">
-              <input type="checkbox" checked={showAircraft} onChange={(e) => setShowAircraft(e.target.checked)} />
-              {lang === "fr" ? "Avions" : "Aircraft"}
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showSats} onChange={(e) => setShowSats(e.target.checked)} />
-              Satellites
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showShips} onChange={(e) => setShowShips(e.target.checked)} />
-              {lang === "fr" ? "Navires" : "Ships"}
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showWeather} onChange={(e) => setShowWeather(e.target.checked)} />
-              {lang === "fr" ? "Météo" : "Weather"}
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showStorms} onChange={(e) => setShowStorms(e.target.checked)} />
-              {lang === "fr" ? "Tempêtes et ouragans" : "Storms & hurricanes"}
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showCams} onChange={(e) => setShowCams(e.target.checked)} />
-              {lang === "fr" ? "Caméras" : "Cameras"}
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={showHeat} onChange={(e) => setShowHeat(e.target.checked)} />
-              {lang === "fr" ? "Zones d’activité" : "Activity zones"}
-            </label>
-          </div>
-          <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
-            <label>{lang === "fr" ? "Navires" : "Ships"}<select value={shipClass} disabled={authConfigured && !member} onChange={(e) => setShipClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="cargo">Cargo</option><option value="tanker">{lang === "fr" ? "Pétrolier" : "Tanker"}</option><option value="passenger">{lang === "fr" ? "Passagers" : "Passenger"}</option><option value="fishing">{lang === "fr" ? "Pêche" : "Fishing"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
-            <label>{lang === "fr" ? "Pavillon" : "Flag"}<select value={shipCountry} disabled={authConfigured && !member} onChange={(e) => setShipCountry(e.target.value)}><option value="all">{lang === "fr" ? "Tous les pays" : "All countries"}</option><option value="Canada">Canada</option><option value="USA">USA</option></select></label>
-            <label>{lang === "fr" ? "Avions" : "Aircraft"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
-            <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
-            <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
-            <label>{lang === "fr" ? "Orbite" : "Orbit"}<select value={satOrbit} disabled={authConfigured && !member} onChange={(e) => setSatOrbit(e.target.value)}><option value="all">{lang === "fr" ? "Toutes" : "All"}</option><option value="LEO">LEO</option><option value="MEO">MEO</option><option value="GEO">GEO</option></select></label>
-            {authConfigured && !member ? <strong>{lang === "fr" ? "Filtres premium — abonnement requis" : "Premium filters — subscription required"}</strong> : null}
+          <div className="layer-filters-panel" aria-label={lang === "fr" ? "Filtres de couches" : "Layer filters"}>
+            <div className="layer-filters-panel-header">{lang === "fr" ? "COUCHES VISIBLES" : "VISIBLE LAYERS"}</div>
+            <div className="row">
+              <label className="toggle">
+                <input type="checkbox" checked={showAircraft} onChange={(e) => setShowAircraft(e.target.checked)} />
+                {lang === "fr" ? "Avions" : "Aircraft"}
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showSats} onChange={(e) => setShowSats(e.target.checked)} />
+                Satellites
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showShips} onChange={(e) => setShowShips(e.target.checked)} />
+                {lang === "fr" ? "Navires" : "Ships"}
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showWeather} onChange={(e) => setShowWeather(e.target.checked)} />
+                {lang === "fr" ? "Météo" : "Weather"}
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showStorms} onChange={(e) => setShowStorms(e.target.checked)} />
+                {lang === "fr" ? "Tempêtes et ouragans" : "Storms & hurricanes"}
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showCams} onChange={(e) => setShowCams(e.target.checked)} />
+                {lang === "fr" ? "Caméras" : "Cameras"}
+              </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showHeat} onChange={(e) => setShowHeat(e.target.checked)} />
+                {lang === "fr" ? "Zones d’activité" : "Activity zones"}
+              </label>
+            </div>
+            <details className="adv-filters">
+              <summary className="adv-filters-summary">
+                {lang === "fr" ? "Filtres avancés" : "Advanced filters"}
+                {[shipClass, shipCountry, aircraftClass, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
+                  <span className="adv-filters-badge">{[shipClass, shipCountry, aircraftClass, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
+                ) : null}
+              </summary>
+              <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
+                <label>{lang === "fr" ? "Navires" : "Ships"}<select value={shipClass} disabled={authConfigured && !member} onChange={(e) => setShipClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="cargo">Cargo</option><option value="tanker">{lang === "fr" ? "Pétrolier" : "Tanker"}</option><option value="passenger">{lang === "fr" ? "Passagers" : "Passenger"}</option><option value="fishing">{lang === "fr" ? "Pêche" : "Fishing"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+                <label>{lang === "fr" ? "Pavillon" : "Flag"}<select value={shipCountry} disabled={authConfigured && !member} onChange={(e) => setShipCountry(e.target.value)}><option value="all">{lang === "fr" ? "Tous les pays" : "All countries"}</option><option value="Canada">Canada</option><option value="USA">USA</option></select></label>
+                <label>{lang === "fr" ? "Avions" : "Aircraft"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+                <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
+                <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
+                <label>{lang === "fr" ? "Orbite" : "Orbit"}<select value={satOrbit} disabled={authConfigured && !member} onChange={(e) => setSatOrbit(e.target.value)}><option value="all">{lang === "fr" ? "Toutes" : "All"}</option><option value="LEO">LEO</option><option value="MEO">MEO</option><option value="GEO">GEO</option></select></label>
+                {authConfigured && !member ? <strong>{lang === "fr" ? "Filtres premium — abonnement requis" : "Premium filters — subscription required"}</strong> : null}
+              </div>
+            </details>
           </div>
 
           <div className="customer-home">
