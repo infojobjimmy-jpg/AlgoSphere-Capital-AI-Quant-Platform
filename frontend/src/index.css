@@ -1466,3 +1466,16 @@ body,
 .toggle--legal-lock{cursor:pointer}
 .toggle--legal-lock input{opacity:.35;pointer-events:none}
 .toggle--legal-lock::after{content:"⚖";font-size:10px;margin-left:5px;color:var(--warn);vertical-align:middle}
+.social-location{flex-direction:column;align-items:stretch}
+.social-consent-dialog{border:1px solid rgba(102,242,213,.35);border-radius:10px;background:#0b1f30;padding:14px;margin-top:8px}
+.social-consent-heading{margin:0 0 10px;color:#66f2d5;font-size:13px;font-weight:700}
+.social-consent-list{margin:0 0 10px;padding-left:18px;color:#9ab8cc;font-size:12px;line-height:1.7}
+.social-consent-legal{margin:8px 0 10px;color:#c0a050;font-size:11px;background:rgba(192,160,80,.09);border-radius:6px;padding:6px 8px}
+.social-consent-actions{display:flex;flex-wrap:wrap;gap:8px}
+.social-consent-actions button{border:0;border-radius:8px;background:#66f2d5;color:#041016;padding:9px 13px;font-size:12px;font-weight:800;cursor:pointer}
+.social-consent-actions button.quiet{background:#142b3e;color:#9db5c8}
+.social-gps-wait{color:#9ab8cc;font-size:12px;padding:8px 0;margin:0}
+.social-presence-active{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+.social-presence-badge{border:1px solid rgba(102,242,213,.5);border-radius:6px;padding:5px 9px;color:#66f2d5;font-size:11px;font-weight:700}
+.social-presence-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.social-delete-btn{color:#e07070!important;border-color:#5a2020!important}

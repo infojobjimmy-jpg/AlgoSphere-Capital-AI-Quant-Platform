@@ -22,6 +22,7 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
   const [message, setMessage] = useState("");
   const [invite, setInvite] = useState("");
   const [error, setError] = useState("");
+  const [locationConsent, setLocationConsent] = useState<"idle" | "pending" | "awaiting_gps">("idle");
 
   const load = async () => {
     const response = await fetch("/api/social/overview", { credentials: "same-origin" });
@@ -49,10 +50,43 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
     event.preventDefault();
     try { await post("/api/social/connect", { invite_code: invite, label: "friends" }); setInvite(""); } catch { setError(fr ? "Code d’invitation introuvable." : "Invite code not found."); }
   };
-  const shareLocation = async (enabled: boolean) => {
-    if (enabled && !currentPosition) { onLocate(); return; }
-    await post("/api/social/presence", { enabled, lat: currentPosition?.lat ?? null, lon: currentPosition?.lon ?? null });
+  // Opens consent dialog; if GPS not yet available, requests it first.
+  const requestLocationConsent = () => {
+    if (!currentPosition) {
+      setLocationConsent("awaiting_gps");
+      onLocate();
+    } else {
+      setLocationConsent("pending");
+    }
   };
+
+  // Called when GPS becomes available while awaiting for dialog.
+  const prevPosition = data; // use data as stable non-null sentinel
+  if (locationConsent === "awaiting_gps" && currentPosition) {
+    setLocationConsent("pending");
+  }
+
+  const confirmPresence = async (precision: "approximate" | "precise") => {
+    setLocationConsent("idle");
+    if (!currentPosition) return;
+    await post("/api/social/presence", {
+      enabled: true,
+      lat: currentPosition.lat,
+      lon: currentPosition.lon,
+      consent_precision: precision,
+    });
+  };
+
+  const stopPresence = async () => {
+    await post("/api/social/presence", { enabled: false, consent_precision: "none", lat: null, lon: null });
+  };
+
+  const deletePresence = async () => {
+    await fetch("/api/social/presence", { method: "DELETE", credentials: "same-origin" });
+    await load();
+  };
+
+  void prevPosition; // suppress unused warning
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -83,7 +117,57 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
         {!data ? <div className="social-loading">{fr ? "Connexion à la communauté…" : "Connecting to the community…"}</div> : null}
         {data && tab === "people" ? <div className="social-people">
           <div className="social-invite"><div><small>{fr ? "VOTRE CODE PRIVÉ" : "YOUR PRIVATE CODE"}</small><strong>{profile.invite_code}</strong><p>{fr ? "Envoyez ce code à votre famille, vos amis ou votre partenaire." : "Send this code to family, friends or your partner."}</p></div><form onSubmit={connect}><input value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase())} placeholder={fr ? "Entrer un code" : "Enter a code"} /><button>{fr ? "Ajouter" : "Add"}</button></form></div>
-          <div className="social-location"><div><strong>📍 {fr ? "Présence sur le globe" : "Globe presence"}</strong><p>{fr ? "Partage précis réservé à vos contacts." : "Precise sharing limited to your contacts."}</p></div><button onClick={() => void shareLocation(true)}>{currentPosition ? (fr ? "Partager maintenant" : "Share now") : (fr ? "Activer le GPS" : "Enable GPS")}</button><button className="quiet" onClick={() => void shareLocation(false)}>{fr ? "Arrêter" : "Stop"}</button></div>
+          <div className="social-location">
+            <div>
+              <strong>📍 {fr ? "Présence sur le globe" : "Globe presence"}</strong>
+              <p>{fr ? "Seuls vos contacts acceptés voient votre position. Elle expire après 24 h." : "Only accepted contacts see your position. It expires after 24 h."}</p>
+            </div>
+            {locationConsent === "pending" ? (
+              <div className="social-consent-dialog" role="dialog" aria-modal="false">
+                <p className="social-consent-heading">{fr ? "Avant de partager votre position" : "Before sharing your position"}</p>
+                <ul className="social-consent-list">
+                  <li>{fr ? "Données : latitude et longitude de votre appareil" : "Data: your device's latitude and longitude"}</li>
+                  <li>{fr ? "Visible par : vos contacts acceptés uniquement" : "Visible to: your accepted contacts only"}</li>
+                  <li>{fr ? "Position approximative : arrondie à ~50 km — recommandé" : "Approximate: rounded to ~50 km — recommended"}</li>
+                  <li>{fr ? "Position précise : coordonnées exactes — uniquement si nécessaire" : "Precise: exact coordinates — only if needed"}</li>
+                  <li>{fr ? "Durée : 24 heures, non renouvelée automatiquement" : "Duration: 24 hours, not automatically renewed"}</li>
+                  <li>{fr ? "Retrait : bouton « Arrêter » ou « Supprimer mes données »" : "Withdrawal: 'Stop' button or 'Delete my data'"}</li>
+                </ul>
+                <p className="social-consent-legal">
+                  {fr ? "⚖ EFVP requise — À VALIDER JURIDIQUEMENT avant toute activation en production." : "⚖ PIA required — REQUIRES LEGAL REVIEW before production activation."}
+                </p>
+                <div className="social-consent-actions">
+                  <button type="button" className="quiet" onClick={() => setLocationConsent("idle")}>{fr ? "Ne pas partager" : "Do not share"}</button>
+                  <button type="button" onClick={() => void confirmPresence("approximate")}>{fr ? "Position approximative (~50 km)" : "Approximate (~50 km)"}</button>
+                  <button type="button" className="quiet" onClick={() => void confirmPresence("precise")}>{fr ? "Position précise" : "Precise position"}</button>
+                </div>
+              </div>
+            ) : locationConsent === "awaiting_gps" ? (
+              <p className="social-gps-wait">{fr ? "En attente du GPS…" : "Waiting for GPS…"}</p>
+            ) : (data?.my_presence?.enabled) ? (
+              <div className="social-presence-active">
+                <span className="social-presence-badge">
+                  {data.my_presence.precision === "approximate"
+                    ? (fr ? "Présence active — approximative" : "Active — approximate")
+                    : (fr ? "Présence active — précise" : "Active — precise")}
+                </span>
+                <div className="social-presence-controls">
+                  <button type="button" className="quiet" onClick={() => void stopPresence()}>{fr ? "Arrêter le partage" : "Stop sharing"}</button>
+                  <button type="button" className="quiet social-delete-btn" onClick={() => void deletePresence()}>{fr ? "Supprimer mes données" : "Delete my data"}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="social-presence-controls">
+                <button type="button" onClick={requestLocationConsent}>
+                  {locationConsent === "awaiting_gps"
+                    ? (fr ? "En attente…" : "Waiting…")
+                    : currentPosition
+                      ? (fr ? "Partager ma position" : "Share my position")
+                      : (fr ? "Activer le GPS" : "Enable GPS")}
+                </button>
+              </div>
+            )}
+          </div>
           <h3>{fr ? "Mes proches" : "My people"}</h3>
           <div className="social-cards">{(data.connections as Row[]).map((person) => <article key={String(person.member_id)}><b>{String(person.avatar)}</b><div><strong>{String(person.display_name)}</strong><span>{relationshipLabel(person.label)} · {String(person.city || person.country || "")}</span>{person.lat ? <button className="social-focus" onClick={() => onFocusPerson(Number(person.lat), Number(person.lon))}>◎ {fr ? "Voir sur le globe" : "View on globe"}</button> : null}</div></article>)}{!data.connections.length ? <p className="social-empty">{fr ? "Ajoutez un proche avec son code privé." : "Add someone using their private code."}</p> : null}</div>
           <h3>{fr ? "Découvrir la communauté" : "Discover the community"}</h3>
@@ -95,7 +179,8 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
           <label>{fr ? "Nom affiché" : "Display name"}<input name="display_name" defaultValue={profile.display_name} minLength={2} maxLength={40} required /></label>
           <label>Bio<textarea name="bio" defaultValue={profile.bio} maxLength={240} /></label>
           <div className="social-form-row"><label>{fr ? "Ville" : "City"}<input name="city" defaultValue={profile.city} /></label><label>{fr ? "Pays" : "Country"}<input name="country" defaultValue={profile.country} /></label></div>
-          <label>{fr ? "Je souhaite rencontrer" : "I want to connect with"}<select name="intent" defaultValue={profile.intent}><option value="family">{fr ? "Famille" : "Family"}</option><option value="friends">{fr ? "Amis" : "Friends"}</option><option value="community">{fr ? "Communauté" : "Community"}</option><option value="dating">{fr ? "Amour / rencontres" : "Dating"}</option></select></label>
+          <label>{fr ? "Je souhaite rencontrer" : "I want to connect with"}<select name="intent" defaultValue={profile.intent}><option value="family">{fr ? "Famille" : "Family"}</option><option value="friends">{fr ? "Amis" : "Friends"}</option><option value="community">{fr ? "Communauté" : "Community"}</option><option value="dating">{fr ? "Rencontres" : "Dating"}</option></select></label>
+          {profile.intent === "dating" || data?.profile?.intent === "dating" ? <p className="social-consent" style={{marginTop:4}}>{fr ? "⚖ L'intention « Rencontres » implique des données sensibles. Une validation juridique est requise pour activer cette option en production (Loi 25, EFVP)." : "⚖ The 'Dating' intent involves sensitive data. Legal review is required before enabling this in production (Law 25, PIA)."}</p> : null}
           <label className="social-check"><input type="checkbox" name="discoverable" defaultChecked={Boolean(profile.discoverable)} />{fr ? "Me rendre visible dans la communauté (jamais ma position précise)" : "Let the community discover me (never my precise location)"}</label>
           <button className="subscription-cta">{fr ? "Enregistrer mon profil" : "Save profile"}</button>
           <p className="social-rewards">{fr ? "Gagnez des points en participant et en ajoutant de vrais contacts. Les objets de collection numériques arriveront dans une phase ultérieure." : "Earn points by participating and adding real contacts. Digital collectibles will arrive in a later phase."}</p>

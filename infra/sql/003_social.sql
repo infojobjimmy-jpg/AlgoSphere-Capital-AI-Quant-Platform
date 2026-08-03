@@ -40,3 +40,13 @@ CREATE TABLE IF NOT EXISTS social_messages (
 
 CREATE INDEX IF NOT EXISTS social_messages_room_id_idx ON social_messages(room, id DESC);
 CREATE INDEX IF NOT EXISTS social_profiles_discoverable_idx ON social_profiles(discoverable, updated_at DESC);
+
+-- Migration guards: safe to run against an existing table (idempotent).
+-- precision: "none" | "approximate" | "precise" — set at write time, never inferred.
+ALTER TABLE social_presence ADD COLUMN IF NOT EXISTS precision        TEXT        NOT NULL DEFAULT 'none';
+-- consent_given_at: when the user explicitly gave consent to share their location.
+ALTER TABLE social_presence ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMPTZ;
+-- expires_at: presence expires after TTL (currently 24 hours); NULL means never-set.
+ALTER TABLE social_presence ADD COLUMN IF NOT EXISTS expires_at       TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS social_presence_expires_idx ON social_presence(expires_at) WHERE enabled = TRUE;

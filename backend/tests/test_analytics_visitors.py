@@ -191,8 +191,8 @@ async def test_accepted_consent_anonymous_creates_full_record(http, db, redis_cl
 
 
 @pytest.mark.asyncio
-async def test_declined_consent_anonymous_no_db_record(http, db, redis_cl):
-    """Declined consent + anonymous: Redis minimal presence only, NO DB row."""
+async def test_declined_consent_anonymous_no_db_no_redis(http, db, redis_cl):
+    """Declined consent + anonymous: NO Redis presence, NO DB row (Law 25 / PIPEDA)."""
     from app.config import settings
     vsid = _make_vsid()
     try:
@@ -207,15 +207,14 @@ async def test_declined_consent_anonymous_no_db_record(http, db, redis_cl):
         })
         assert r.status_code == 200
         data = r.json()
-        assert data["redis"] is True
-        assert data["db"] is None  # None = skipped (not an error)
+        # After compliance fix (commit 273bb4c): both redis and db are None for
+        # anonymous visitors who have not given consent.
+        assert data["redis"] is None, "Redis must not be written for declined anonymous visitors"
+        assert data["db"] is None
 
-        # Redis: marketing fields stripped
+        # Redis: no presence key must exist
         presence_raw = await redis_cl.get(f"{settings.app_slug}:presence:{vsid}")
-        assert presence_raw is not None
-        p = json.loads(presence_raw)
-        assert p["device_type"] == "unknown"
-        assert p["utm_source"] == ""
+        assert presence_raw is None, "No Redis presence key for non-consented anonymous visitor"
 
         # DB: absolutely no row
         row = await _get_vs_row(db, vsid)
@@ -228,13 +227,14 @@ async def test_declined_consent_anonymous_no_db_record(http, db, redis_cl):
 
 @pytest.mark.asyncio
 async def test_redis_ttl_set_to_90s(http, redis_cl):
-    """Heartbeat sets Redis key with TTL ≤ 90 seconds."""
+    """Heartbeat sets Redis key with TTL ≤ 90 seconds (requires consent=accepted)."""
     from app.config import settings
     vsid = _make_vsid()
+    # Must use consent=accepted: declined visitors no longer write to Redis (Law 25).
     await http.post("/analytics/heartbeat", json={
         "visitor_session_id": vsid,
         "page": "/",
-        "consent": "declined",
+        "consent": "accepted",
     })
     key = f"{settings.app_slug}:presence:{vsid}"
     ttl = await redis_cl.ttl(key)
