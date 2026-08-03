@@ -14,6 +14,12 @@ export default function ConsentBanner() {
   }, []);
 
   useEffect(() => {
+    const handler = () => setChoice(null);
+    window.addEventListener("algosphere-open-privacy-settings", handler);
+    return () => window.removeEventListener("algosphere-open-privacy-settings", handler);
+  }, []);
+
+  useEffect(() => {
     if (choice === "accepted") trackEvent(window.location.pathname === "/app" ? "app_open" : "page_view");
   }, [choice]);
 

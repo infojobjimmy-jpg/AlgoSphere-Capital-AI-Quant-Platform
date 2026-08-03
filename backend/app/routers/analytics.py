@@ -194,9 +194,12 @@ async def heartbeat(
 
     now_ts = int(time.time())
 
-    # ── Redis presence ───────────────────────────────────────────────────────
-    # Always written (needed for live-visitors count).
-    # Marketing fields stripped when consent not accepted.
+    # ── Anonymous non-consented visitors: skip all tracking ─────────────────
+    # Law 25 / PIPEDA: no analytics collection without consent for anonymous visitors.
+    if not consent_accepted and not is_auth and not is_owner:
+        return {"ok": True, "redis": None, "db": None}
+
+    # ── Redis presence (authenticated users or consented visitors only) ───────
     presence_data = json.dumps({
         "visitor_session_id": body.visitor_session_id,
         "type": "owner" if is_owner else ("member" if is_auth else "anonymous"),
@@ -225,10 +228,6 @@ async def heartbeat(
         await redis_client.aclose()
 
     # ── PostgreSQL persistence ───────────────────────────────────────────────
-    # Anonymous visitors with no consent → skip entirely (no persistent record).
-    if not consent_accepted and not is_auth and not is_owner:
-        return {"ok": True, "redis": redis_ok, "db": None}
-
     # Marketing fields stored only when consent is accepted.
     store_marketing = consent_accepted
 

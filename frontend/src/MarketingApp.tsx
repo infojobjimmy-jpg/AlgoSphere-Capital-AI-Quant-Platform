@@ -16,24 +16,34 @@ const legalCopy = {
   privacy: {
     fr: {
       title: "Politique de confidentialité",
-      intro: "Dernière mise à jour : 25 juillet 2026",
+      intro: "Dernière mise à jour technique : 3 août 2026 — À VALIDER JURIDIQUEMENT avant toute publication officielle. Ce document est un texte de travail préliminaire; il ne constitue pas un avis juridique final.",
       sections: [
-        ["Données recueillies", "AlgoSphere Global traite les renseignements nécessaires au fonctionnement du service, notamment les données techniques de connexion, les préférences enregistrées et les informations d’abonnement transmises par Whop. Nous ne recevons ni ne conservons vos données de carte bancaire."],
-        ["Utilisation et mesure d’audience", "Ces données servent à fournir l’accès, sécuriser les sessions et conserver vos préférences. Avec votre consentement, nous enregistrons des événements limités comme les pages visitées et les clics vers Whop afin de mesurer les conversions. Aucun profil publicitaire n’est créé."],
-        ["Fournisseurs", "Whop traite les paiements et les abonnements. Les couches cartographiques et géospatiales peuvent provenir de Cesium et de fournisseurs de données autorisés. Chacun applique sa propre politique de confidentialité."],
-        ["Conservation et sécurité", "Nous limitons la conservation à ce qui est nécessaire au service et utilisons des mesures raisonnables de sécurité. Aucune transmission sur Internet ne peut toutefois être garantie sans risque."],
-        ["Vos choix", "Vous pouvez gérer ou annuler votre abonnement dans Whop. Pour demander l’accès, la correction ou la suppression de renseignements associés à votre compte, utilisez la page de contact AlgoSphere sur Whop."],
+        ["Responsable du traitement", "AlgoSphere Global exploite ce service d’intelligence géospatiale. Nom légal complet, adresse et coordonnées du responsable de la protection des renseignements personnels : INFORMATION LÉGALE REQUISE — à compléter et à valider par un juriste avant la publication. Pour toute question : page AlgoSphere sur Whop (lien en bas de page)."],
+        ["Renseignements traités", "Nous pouvons traiter, selon vos choix : (1) Données de service — clé de licence et statut d’abonnement transmis par Whop.com, données de session de connexion, préférences enregistrées (favoris, alertes). Nous ne recevons ni ne conservons vos données de carte bancaire. (2) Mesure d’audience — avec votre consentement uniquement : pages consultées, événements d’utilisation, source de la visite, type d’appareil. Un identifiant de visite pseudonymisé est stocké. (3) Présence sociale — avec votre consentement explicite uniquement : votre position géographique si vous activez la fonctionnalité de présence dans le module social. Cette information n’est partagée qu’avec les contacts que vous avez vous-même ajoutés."],
+        ["Finalités et bases de traitement", "Exécution du service (base : exécution du contrat) : authentification, vérification de l’abonnement, conservation des préférences. Mesure d’audience (base : consentement — retirable en tout temps) : amélioration du service, mesure des conversions. Présence sociale (base : consentement explicite) : fonctionnalité optionnelle de partage de localisation entre membres. Sécurité et prévention des abus (base : intérêt légitime) : journaux temporaires, limiteurs de débit."],
+        ["Transferts hors Québec / hors Canada", "Whop.com (États-Unis) traite les paiements, les abonnements et la validation des licences. Ce transfert est soumis à la Loi modernisant des dispositions législatives en matière de protection des renseignements personnels (Loi 25, Québec) et à la LPRPDE. Une évaluation des facteurs relatifs à la vie privée (EFVP) est requise pour ce transfert — INFORMATION LÉGALE REQUISE. Nous ne vendons aucun renseignement personnel à des tiers."],
+        ["Fournisseurs de services tiers", "Whop.com (États-Unis) : abonnements et paiements. Cesium ion : affichage de la carte 3D. Fournisseurs de données géospatiales : couches approuvées (OpenSky, AISstream, Open-Meteo, etc.). Chaque fournisseur applique sa propre politique de confidentialité."],
+        ["Conservation", "Sessions de visite non authentifiées : 90 jours. Sessions de membres identifiés : 2 ans ou jusqu’à la suppression du compte. Journaux de sécurité temporaires : 30 jours. Durées définitives : INFORMATION LÉGALE REQUISE — à formaliser dans une politique de conservation validée."],
+        ["Vos droits (Loi 25 / LPRPDE)", "Vous avez le droit d’accéder à vos renseignements personnels, de les faire corriger ou supprimer, d’en recevoir une copie (portabilité), et de retirer votre consentement en tout temps sans préjudice rétroactif. Pour exercer ces droits : page AlgoSphere sur Whop. Processus formel et délais de réponse : INFORMATION LÉGALE REQUISE avant publication."],
+        ["Préférences de confidentialité", "Vous pouvez accepter ou refuser la mesure d’audience lors de votre première visite. Pour modifier votre choix à tout moment, cliquez sur « Préférences de confidentialité » dans le pied de page de n’importe quelle page AlgoSphere Global."],
+        ["Sécurité", "Nous utilisons HTTPS, des cookies de session sécurisés (HttpOnly, Secure, SameSite=Lax), une authentification à code temporaire pour l’accès propriétaire, et des limiteurs de débit. Aucune transmission sur Internet ne peut être garantie sans risque."],
+        ["Mises à jour", "Cette politique peut être mise à jour. La date de dernière modification est indiquée en haut de la page. Les changements importants seront signalés aux abonnés. Consultez régulièrement cette page."],
       ],
     },
     en: {
       title: "Privacy policy",
-      intro: "Last updated: July 25, 2026",
+      intro: "Technical last updated: August 3, 2026 — REQUIRES LEGAL REVIEW before any official publication. This is a preliminary working document, not a final legal opinion.",
       sections: [
-        ["Data we process", "AlgoSphere Global processes information required to operate the service, including technical connection data, saved preferences and subscription information supplied by Whop. We do not receive or store payment-card details."],
-        ["Use and audience measurement", "We use this data to provide access, secure sessions and save preferences. With your consent, we record limited events such as page views and clicks to Whop to measure conversions. We do not create advertising profiles."],
-        ["Service providers", "Whop processes payments and subscriptions. Map and geospatial layers may be provided by Cesium and approved data providers, each under its own privacy policy."],
-        ["Retention and security", "We retain data only as needed for the service and apply reasonable safeguards. No Internet transmission can be guaranteed risk-free."],
-        ["Your choices", "You may manage or cancel through Whop. To request access, correction or deletion of account-related information, use AlgoSphere’s Whop contact page."],
+        ["Data controller", "AlgoSphere Global operates this geospatial intelligence service. Full legal name, address and privacy officer contact: LEGAL INFORMATION REQUIRED — to be completed and validated by legal counsel before publication. For questions: AlgoSphere page on Whop (link at the bottom)."],
+        ["Information we process", "Depending on your choices, we may process: (1) Service data — license key and subscription status from Whop.com, session and authentication data, saved preferences (favorites, alerts). We do not receive or store payment-card details. (2) Audience measurement — with your consent only: pages viewed, usage events, visit source, device type. A pseudonymous visit identifier is stored. (3) Social presence — with your explicit consent only: your geographic position if you enable the presence feature in the social module. This is shared only with contacts you have added yourself."],
+        ["Purposes and legal bases", "Service delivery (basis: contract performance): authentication, subscription verification, preferences. Audience measurement (basis: consent — withdrawable at any time): service improvement, conversion measurement. Social presence (basis: explicit consent): optional location-sharing feature between members. Security and abuse prevention (basis: legitimate interest): temporary logs, rate limiting."],
+        ["Cross-border transfers", "Whop.com (United States) processes payments, subscriptions and license validation. This transfer is subject to Quebec Law 25 and PIPEDA. A Privacy Impact Assessment (PIA) is required for this transfer — LEGAL INFORMATION REQUIRED. We do not sell personal information to third parties."],
+        ["Third-party service providers", "Whop.com (United States): subscriptions and payments. Cesium ion: 3D map display. Geospatial data providers: approved layers (OpenSky, AISstream, Open-Meteo, etc.). Each provider operates under its own privacy policy."],
+        ["Retention", "Non-authenticated visit sessions: 90 days. Identified member sessions: 2 years or until account deletion. Temporary security logs: 30 days. Final retention periods: LEGAL INFORMATION REQUIRED — to be formalized in a validated retention schedule."],
+        ["Your rights (Law 25 / PIPEDA)", "You have the right to access, correct or delete your personal information, receive a copy (portability), and withdraw consent at any time without retroactive penalty. To exercise these rights: AlgoSphere page on Whop. Formal process and response timelines: LEGAL INFORMATION REQUIRED before publication."],
+        ["Privacy preferences", "You may accept or decline audience measurement on your first visit. To change your choice at any time, click ‘Privacy preferences’ in the footer of any AlgoSphere Global page."],
+        ["Security", "We use HTTPS, secure session cookies (HttpOnly, Secure, SameSite=Lax), temporary-code authentication for owner access, and rate limiting. No Internet transmission can be guaranteed risk-free."],
+        ["Updates", "This policy may be updated. The last modification date is shown at the top of the page. Material changes will be communicated to subscribers. Check this page regularly."],
       ],
     },
   },
@@ -226,7 +236,15 @@ export default function MarketingApp() {
       <footer className="mkt-footer">
         <a className="mkt-brand" href="/"><span>ALGOSPHERE</span> GLOBAL</a>
         <p>{fr ? "Intelligence géospatiale mondiale. Les données externes peuvent être retardées ou temporairement indisponibles." : "Global geospatial intelligence. External data may be delayed or temporarily unavailable."}</p>
-        <nav><a href={fr ? "/confidentialite" : "/privacy"}>{fr ? "Confidentialité" : "Privacy"}</a><a href={fr ? "/conditions" : "/terms"}>{fr ? "Conditions" : "Terms"}</a><a href={fr ? "/remboursement" : "/refunds"}>{fr ? "Remboursement" : "Refunds"}</a><a href="https://whop.com/algosphere-ia-lab/" target="_blank" rel="noreferrer">Contact</a></nav>
+        <nav>
+          <a href={fr ? "/confidentialite" : "/privacy"}>{fr ? "Confidentialité" : "Privacy"}</a>
+          <a href={fr ? "/conditions" : "/terms"}>{fr ? "Conditions" : "Terms"}</a>
+          <a href={fr ? "/remboursement" : "/refunds"}>{fr ? "Remboursement" : "Refunds"}</a>
+          <a href="https://whop.com/algosphere-ia-lab/" target="_blank" rel="noreferrer">Contact</a>
+          <button type="button" className="mkt-footer-privacy-btn" onClick={() => window.dispatchEvent(new CustomEvent("algosphere-open-privacy-settings"))}>
+            {fr ? "Préférences de confidentialité" : "Privacy preferences"}
+          </button>
+        </nav>
         <small>© 2026 AlgoSphere Global</small>
       </footer>
     </main>

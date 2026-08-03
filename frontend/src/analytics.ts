@@ -103,8 +103,10 @@ let _heartbeatTimer: number | null = null;
 
 export function sendHeartbeat(page?: string): void {
   const consent = analyticsConsent();
-  // Marketing fields only sent when consent is accepted.
-  const campaign = consent === "accepted" ? campaignProperties() : {};
+  // Do not send any heartbeat until the user has explicitly accepted analytics.
+  // This prevents tracking anonymous or declined visitors in Redis/DB presence tables.
+  if (consent !== "accepted") return;
+  const campaign = campaignProperties();
   void fetch("/api/analytics/heartbeat", {
     method: "POST",
     credentials: "same-origin",
