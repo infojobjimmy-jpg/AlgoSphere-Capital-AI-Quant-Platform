@@ -98,20 +98,29 @@ function navStatusLabel(v: number | null): string {
   return NAV_STATUS_LABELS[v] ?? `Status ${v}`;
 }
 
+// ICAO Doc 8168 / Annex 2 standard squawk code meanings
 const SQUAWK_LABELS: Record<string, string> = {
-  "7500": "HIJACK",
-  "7600": "LOST COMMS",
-  "7700": "EMERGENCY",
-  "1200": "VFR",
+  "7500": "unlawful interference",
+  "7600": "radio communication failure",
+  "7700": "general emergency",
+  "1200": "VFR — general aviation (North America)",
   "2000": "IFR en route",
 };
 const EMERGENCY_SQUAWKS = new Set(["7500", "7600", "7700"]);
 
+// Altitude band: observation of barometric altitude — not flight phase
+const ALTITUDE_BAND_LABELS: Record<string, { fr: string; en: string }> = {
+  ground: { fr: "Au sol",                          en: "On ground" },
+  low:    { fr: "Basse altitude (< 3 000 m)",      en: "Low altitude (< 3 000 m)" },
+  medium: { fr: "Altitude moyenne (3 000–7 500 m)", en: "Mid altitude (3 000–7 500 m)" },
+  high:   { fr: "Haute altitude (> 7 500 m)",      en: "High altitude (> 7 500 m)" },
+};
+
+// Flight phase: only when vertical_rate is confirmed (CLIMBING/DESCENDING/LEVEL)
 const FLIGHT_PHASE_LABELS: Record<string, { fr: string; en: string }> = {
-  ground:  { fr: "Au sol",           en: "On ground" },
-  low:     { fr: "Basse altitude",   en: "Low altitude" },
-  medium:  { fr: "Montée / descente", en: "Climbing / descending" },
-  high:    { fr: "Croisière",        en: "Cruise" },
+  CLIMBING:   { fr: "Montée",           en: "Climbing" },
+  DESCENDING: { fr: "Descente",         en: "Descending" },
+  LEVEL:      { fr: "Vol horizontal",   en: "Level flight" },
 };
 
 function colorForTempC(t: number | undefined): Cesium.Color {
@@ -709,12 +718,14 @@ export default function App() {
       const aircraftVisible = (a: Record<string, unknown>): boolean => {
         if (aircraftClass !== "all" && String(a.aircraft_class ?? "other") !== aircraftClass) return false;
         if (aircraftPhase !== "all") {
-          const phase = a.flight_phase != null
-            ? String(a.flight_phase)
+          // altitude_band is the backend field (ground/low/medium/high);
+          // fall back to client-side derivation for aircraft where the field is absent.
+          const band = a.altitude_band != null
+            ? String(a.altitude_band)
             : a.on_ground === true ? "ground"
             : a.alt_m != null ? (Number(a.alt_m) < 3000 ? "low" : Number(a.alt_m) < 7500 ? "medium" : "high")
             : null;
-          if (phase !== aircraftPhase) return false;
+          if (band !== aircraftPhase) return false;
         }
         return true;
       };
@@ -1633,12 +1644,12 @@ export default function App() {
                   <option value="government">{lang === "fr" ? "Gouvernemental / Militaire" : "Government / Military"}</option>
                   <option value="other">{lang === "fr" ? "Non classifié" : "Unclassified"}</option>
                 </select></label>
-                <label>{lang === "fr" ? "Avions · phase de vol" : "Aircraft · flight phase"}<select value={aircraftPhase} disabled={authConfigured && !member} onChange={(e) => setAircraftPhase(e.target.value)}>
+                <label>{lang === "fr" ? "Avions · bande d'altitude" : "Aircraft · altitude band"}<select value={aircraftPhase} disabled={authConfigured && !member} onChange={(e) => setAircraftPhase(e.target.value)}>
                   <option value="all">{lang === "fr" ? "Toutes" : "All"}</option>
                   <option value="ground">{lang === "fr" ? "Au sol" : "On ground"}</option>
                   <option value="low">{lang === "fr" ? "Basse altitude (< 3 000 m)" : "Low altitude (< 3 000 m)"}</option>
-                  <option value="medium">{lang === "fr" ? "Montée / descente" : "Climbing / descending"}</option>
-                  <option value="high">{lang === "fr" ? "Croisière (> 7 500 m)" : "Cruise (> 7 500 m)"}</option>
+                  <option value="medium">{lang === "fr" ? "Altitude moyenne (3 000–7 500 m)" : "Mid altitude (3 000–7 500 m)"}</option>
+                  <option value="high">{lang === "fr" ? "Haute altitude (> 7 500 m)" : "High altitude (> 7 500 m)"}</option>
                 </select></label>
                 <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
@@ -2171,6 +2182,9 @@ export default function App() {
                     const sq = String(value);
                     const lbl = SQUAWK_LABELS[sq];
                     display = lbl ? `${sq} — ${lbl}` : sq;
+                  } else if (key === "altitude_band" && selectedFeature.kind === "aircraft") {
+                    const p = ALTITUDE_BAND_LABELS[String(value)];
+                    display = p ? (lang === "fr" ? p.fr : p.en) : String(value);
                   } else if (key === "flight_phase" && selectedFeature.kind === "aircraft") {
                     const p = FLIGHT_PHASE_LABELS[String(value)];
                     display = p ? (lang === "fr" ? p.fr : p.en) : String(value);

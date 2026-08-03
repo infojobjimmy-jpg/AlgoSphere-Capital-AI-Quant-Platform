@@ -2,39 +2,87 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
-_AIRLINE_CALLSIGN = re.compile(r"^[A-Z]{3}\d{1,4}[A-Z]?$")
+# ICAO transponder codes defined in ICAO Doc 8168 / Annex 2
 _EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
+# 1200 is the North-American VFR code (FAA JO 7110.65); not a class by itself.
+_VFR_SQUAWK_NA = "1200"
 
 
-def _aircraft_class_from(callsign: str, squawk: str | None) -> str | None:
+def _classify_aircraft(squawk: str | None) -> dict[str, str] | None:
+    """Classify an aircraft only from confirmed data (squawk transponder codes).
+
+    Callsign-pattern heuristics are intentionally excluded: matching a
+    3-letter ICAO airline code is not the same as confirming the operator
+    through an authorised airline database.  Returns None when the class
+    cannot be reliably determined.
+    """
     sq = str(squawk or "").strip()
     if sq in _EMERGENCY_SQUAWKS:
-        return "emergency"
-    if sq == "1200":
-        return "private"
-    if callsign and _AIRLINE_CALLSIGN.match(callsign):
-        return "commercial"
+        return {
+            "aircraft_class": "emergency",
+            "aircraft_class_derived_from": "squawk",
+            "aircraft_class_confidence": "high",
+        }
+    if sq == _VFR_SQUAWK_NA:
+        return {
+            "aircraft_class": "general_aviation",
+            "aircraft_class_derived_from": "squawk_vfr_north_america",
+            "aircraft_class_confidence": "high",
+        }
     return None
 
 
-def _flight_phase(baro_alt: Any, on_ground: bool) -> str | None:
+def _altitude_band(baro_alt: Any, on_ground: bool) -> dict[str, str] | None:
+    """Derive altitude band from barometric altitude.
+
+    This is an altitude observation, not a flight-phase determination.
+    CLIMBING / DESCENDING / LEVEL require vertical_rate and are handled
+    separately by _derive_flight_phase().
+    """
     if on_ground:
-        return "ground"
+        return {
+            "altitude_band": "ground",
+            "altitude_band_derived_from": "on_ground_flag",
+            "altitude_band_confidence": "high",
+        }
     try:
         alt = float(baro_alt)
     except (TypeError, ValueError):
         return None
-    if alt < 3_000:
-        return "low"
-    if alt < 7_500:
-        return "medium"
-    return "high"
+    band = "low" if alt < 3_000 else "medium" if alt < 7_500 else "high"
+    return {
+        "altitude_band": band,
+        "altitude_band_derived_from": "baro_altitude_m",
+        "altitude_band_confidence": "high",
+    }
+
+
+def _derive_flight_phase(vertical_rate_mps: float | None, on_ground: bool) -> dict[str, str] | None:
+    """Derive flight phase only when vertical_rate is available and unambiguous.
+
+    Thresholds (ICAO-aligned, conservative):
+      CLIMBING   : v ≥  1.0 m/s (~200 ft/min)
+      DESCENDING : v ≤ -1.0 m/s
+      LEVEL      : |v| ≤ 0.25 m/s (~50 ft/min) — aircraft in flight, truly level
+    Rates between ±0.25 and ±1.0 m/s are transitional and left unclassified.
+    """
+    if on_ground or vertical_rate_mps is None:
+        return None
+    v = vertical_rate_mps
+    if v >= 1.0:
+        conf = "high" if v >= 5.0 else "medium"
+        return {"flight_phase": "CLIMBING", "flight_phase_derived_from": "vertical_rate_mps", "flight_phase_confidence": conf}
+    if v <= -1.0:
+        conf = "high" if v <= -5.0 else "medium"
+        return {"flight_phase": "DESCENDING", "flight_phase_derived_from": "vertical_rate_mps", "flight_phase_confidence": conf}
+    if abs(v) <= 0.25:
+        return {"flight_phase": "LEVEL", "flight_phase_derived_from": "vertical_rate_mps", "flight_phase_confidence": "high"}
+    return None  # transitional rate — no reliable classification
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +161,8 @@ def _parse_states(data: Any) -> list[dict[str, Any]]:
         on_ground = s[8]
         vel = s[9]
         true_track = s[10]
+        # s[11] = vertical_rate (m/s, baro), available in OpenSky state vectors
+        vertical_rate_raw = s[11] if len(s) > 11 else None
         squawk = s[14] if len(s) > 14 else None
         if lat is None or lon is None:
             continue
@@ -123,8 +173,8 @@ def _parse_states(data: Any) -> list[dict[str, Any]]:
             continue
         obs = _iso_from_unix(time_pos if time_pos is not None else last_contact)
         sq = str(squawk or "").strip() or None
-        cls = _aircraft_class_from(callsign, sq)
-        phase = _flight_phase(baro_alt, bool(on_ground))
+        on_gnd = bool(on_ground)
+        vr_mps = float(vertical_rate_raw) if vertical_rate_raw is not None else None
         row: dict[str, Any] = {
             "id": str(icao24),
             "callsign": callsign or str(icao24),
@@ -132,17 +182,23 @@ def _parse_states(data: Any) -> list[dict[str, Any]]:
             "lon": lon_f,
             "alt_m": float(baro_alt) if baro_alt is not None else None,
             "velocity_mps": float(vel) if vel is not None else None,
+            "vertical_rate_mps": vr_mps,
             "heading_deg": float(true_track) if true_track is not None else None,
-            "on_ground": bool(on_ground),
+            "on_ground": on_gnd,
             "squawk": sq,
             "observed_at": obs,
             "ingest_type": "aircraft",
             "source": "opensky",
         }
-        if cls is not None:
-            row["aircraft_class"] = cls
-        if phase is not None:
-            row["flight_phase"] = phase
+        cls_meta = _classify_aircraft(sq)
+        if cls_meta:
+            row.update(cls_meta)
+        band_meta = _altitude_band(baro_alt, on_gnd)
+        if band_meta:
+            row.update(band_meta)
+        phase_meta = _derive_flight_phase(vr_mps, on_gnd)
+        if phase_meta:
+            row.update(phase_meta)
         out.append(row)
     return out
 
@@ -169,21 +225,22 @@ async def fetch_aircraft_states() -> list[dict[str, Any]]:
                     continue
                 flags = int(item.get("dbFlags") or 0)
                 squawk_raw = str(item.get("squawk") or "").strip() or None
-                category = "government" if flags & 1 else "emergency" if squawk_raw in _EMERGENCY_SQUAWKS else "commercial" if item.get("flight") else "private"
                 alt_baro = item.get("alt_baro")
                 on_gnd = alt_baro == "ground"
                 alt_m = float(alt_baro) * 0.3048 if isinstance(alt_baro, (int, float)) else None
-                phase = _flight_phase(alt_m, on_gnd)
+                # baro_rate from adsb.lol is in ft/min; convert to m/s (1 ft/min = 0.00508 m/s)
+                baro_rate_raw = item.get("baro_rate")
+                vr_mps = float(baro_rate_raw) * 0.00508 if isinstance(baro_rate_raw, (int, float)) else None
                 entry: dict[str, Any] = {
                     "id": ident,
                     "callsign": str(item.get("flight") or ident).strip(),
                     "registration": item.get("r"),
                     "aircraft_type": item.get("t"),
-                    "aircraft_class": category,
                     "lat": float(lat),
                     "lon": float(lon),
                     "alt_m": alt_m,
                     "velocity_mps": float(item.get("gs")) * 0.514444 if item.get("gs") is not None else None,
+                    "vertical_rate_mps": vr_mps,
                     "heading_deg": item.get("track"),
                     "on_ground": on_gnd,
                     "squawk": squawk_raw,
@@ -192,8 +249,19 @@ async def fetch_aircraft_states() -> list[dict[str, Any]]:
                     "source": "adsb.lol",
                     "license": "ODbL-1.0",
                 }
-                if phase is not None:
-                    entry["flight_phase"] = phase
+                # dbFlags bit 0 = military/government (confirmed by adsb.lol/OpenSky database)
+                if flags & 1:
+                    entry.update({"aircraft_class": "government", "aircraft_class_derived_from": "adsb_db_flags_military", "aircraft_class_confidence": "high"})
+                else:
+                    cls_meta = _classify_aircraft(squawk_raw)
+                    if cls_meta:
+                        entry.update(cls_meta)
+                band_meta = _altitude_band(alt_m, on_gnd)
+                if band_meta:
+                    entry.update(band_meta)
+                phase_meta = _derive_flight_phase(vr_mps, on_gnd)
+                if phase_meta:
+                    entry.update(phase_meta)
                 out[ident] = entry
         return list(out.values())[:2500]
     except Exception:
