@@ -7,7 +7,7 @@ import AccountPanel from "./components/subscriptions/AccountPanel";
 import SocialPanel from "./components/social/SocialPanel";
 import LanguageSelect from "./components/LanguageSelect";
 import { Language, savedLanguage, useInterfaceTranslation } from "./i18n";
-import { initHeartbeat, sendHeartbeat } from "./analytics";
+import { initHeartbeat, sendHeartbeat, trackEvent } from "./analytics";
 
 type StrategySnap = {
   goals_active?: Array<{ id: number; description: string; priority: number }>;
@@ -226,6 +226,7 @@ export default function App() {
   const gpsMarkerRef = useRef<Cesium.PointPrimitive | null>(null);
   const gpsAccuracyEntityRef = useRef<Cesium.Entity | null>(null);
   const followUserRef = useRef<boolean>(false);
+  const firstActionFiredRef = useRef(false);
   const satLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const labelsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const handlePositionUpdateRef = useRef<(c: GeolocationCoordinates) => void>(() => {});
@@ -340,6 +341,7 @@ export default function App() {
   }, [clearAuth]);
 
   useEffect(() => {
+    trackEvent("application_open");
     initHeartbeat(() => window.location.pathname);
     return () => { /* heartbeat stops naturally when tab closes */ };
   }, []);
@@ -353,6 +355,18 @@ export default function App() {
     document.documentElement.lang = lang === "fr" ? "fr-CA" : lang;
     window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
   }, [lang]);
+
+  useEffect(() => {
+    if (routeStatus === "error" && routeError) {
+      trackEvent("error_displayed", { properties: { context: "navigation", message: routeError.slice(0, 100) } });
+    }
+  }, [routeStatus, routeError]);
+
+  useEffect(() => {
+    if (gpsStatus === "denied") {
+      trackEvent("error_displayed", { properties: { context: "gps" } });
+    }
+  }, [gpsStatus]);
 
   const counts = useMemo(() => {
     const layers = snap?.layers ?? {};
@@ -437,8 +451,13 @@ export default function App() {
     });
 
     viewerRef.current = viewer;
+    trackEvent("application_loaded");
     const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     clickHandler.setInputAction((movement: { position: Cesium.Cartesian2 }) => {
+      if (!firstActionFiredRef.current) {
+        firstActionFiredRef.current = true;
+        trackEvent("first_meaningful_action", { properties: { action: "globe_click" } });
+      }
       const picked = viewer.scene.pick(movement.position) as { id?: unknown; primitive?: { id?: unknown } } | undefined;
       const value = picked?.id ?? picked?.primitive?.id;
       if (value && typeof value === "object" && "kind" in value && "data" in value) {

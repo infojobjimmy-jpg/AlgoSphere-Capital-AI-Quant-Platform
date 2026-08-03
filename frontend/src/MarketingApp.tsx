@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./marketing.css";
 import LanguageSelect from "./components/LanguageSelect";
 import { Language, savedLanguage, useInterfaceTranslation } from "./i18n";
+import { initHeartbeat, trackEvent } from "./analytics";
 
 type Lang = Language;
 
@@ -118,6 +119,11 @@ export default function MarketingApp() {
     document.documentElement.lang = lang === "fr" ? "fr-CA" : lang;
     window.dispatchEvent(new CustomEvent("algosphere-language-change", { detail: lang }));
   }, [lang]);
+
+  useEffect(() => {
+    trackEvent("landing_page_view", { properties: { lang } });
+    initHeartbeat(() => window.location.pathname);
+  }, []);
   if (legalPage) return <LegalPage page={legalPage} lang={lang} setLang={setLang} />;
 
   const fr = lang === "fr";
@@ -128,7 +134,7 @@ export default function MarketingApp() {
         <nav>
           <a href="#capacites">{fr ? "Capacités" : "Capabilities"}</a>
           <a href="#abonnements">{fr ? "Abonnements" : "Pricing"}</a>
-          <a className="mkt-nav-app" href="/app">{fr ? "Ouvrir le globe" : "Open globe"}</a>
+          <a className="mkt-nav-app" href="/app" onClick={() => trackEvent("primary_cta_click", { properties: { cta: "nav_open_globe", lang } })}>{fr ? "Ouvrir le globe" : "Open globe"}</a>
           <LanguageSelect className="mkt-lang" value={lang} onChange={setLang} />
         </nav>
       </header>
@@ -143,7 +149,7 @@ export default function MarketingApp() {
             ? "Avions, satellites, navires, météo, tempêtes et caméras réunis sur un globe 3D vivant — dans une seule vue."
             : "Aircraft, satellites, vessels, weather, storms and cameras brought together on one living 3D globe."}</p>
           <div className="mkt-actions">
-            <a className="mkt-primary" href="/app">{fr ? "Explorer le globe en direct" : "Explore the live globe"}</a>
+            <a className="mkt-primary" href="/app" onClick={() => trackEvent("primary_cta_click", { properties: { cta: "hero_explore", lang } })}>{fr ? "Explorer le globe en direct" : "Explore the live globe"}</a>
             <a className="mkt-secondary" href="#abonnements">{fr ? "Voir les abonnements" : "View pricing"}</a>
           </div>
           <small>{fr ? "Accès public immédiat · fonctions avancées avec abonnement" : "Instant public access · advanced tools with membership"}</small>
@@ -170,7 +176,7 @@ export default function MarketingApp() {
       <section id="capacites" className="mkt-section">
         <div className="mkt-section-head">
           <div><p className="mkt-eyebrow">{fr ? "COUVERTURE UNIFIÉE" : "UNIFIED COVERAGE"}</p><h2>{fr ? "Une fenêtre sur l’activité mondiale" : "One window into global activity"}</h2></div>
-          <a href="/app">{fr ? "Voir les données en direct →" : "See live data →"}</a>
+          <a href="/app" onClick={() => trackEvent("primary_cta_click", { properties: { cta: "capabilities_live_data", lang } })}>{fr ? "Voir les données en direct →" : "See live data →"}</a>
         </div>
         <div className="mkt-grid">
           {[
@@ -214,7 +220,7 @@ export default function MarketingApp() {
         <p className="mkt-eyebrow">ALGOSPHERE GLOBAL</p>
         <h2>{fr ? "Le monde est déjà en mouvement." : "The world is already moving."}</h2>
         <p>{fr ? "Ouvrez le globe et voyez ce qui se passe maintenant." : "Open the globe and see what is happening now."}</p>
-        <a className="mkt-primary" href="/app">{fr ? "Explorer gratuitement" : "Explore for free"}</a>
+        <a className="mkt-primary" href="/app" onClick={() => trackEvent("primary_cta_click", { properties: { cta: "footer_explore", lang } })}>{fr ? "Explorer gratuitement" : "Explore for free"}</a>
       </section>
 
       <footer className="mkt-footer">
