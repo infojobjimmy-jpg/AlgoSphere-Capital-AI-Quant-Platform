@@ -189,6 +189,8 @@ body,
 }
 .gps-mode-tabs button.is-active { color: #041018; border-color: #7af8d6; background: linear-gradient(135deg, #7af8d6, #4fd1ff); }
 .gps-actions { margin-bottom: 18px; }
+.gps-fix-info { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.gps-fix-info span { font-size: 11px; color: var(--muted); background: rgba(122, 248, 214, .08); border: 1px solid rgba(122, 248, 214, .2); border-radius: 5px; padding: 2px 7px; }
 .gps-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
 .gps-feature-grid article { display: grid; gap: 7px; padding: 16px; border: 1px solid rgba(120, 200, 255, .18); border-radius: 13px; background: rgba(8, 17, 31, .76); }
 .gps-feature-grid article strong { color: #7af8d6; }

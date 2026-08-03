@@ -188,6 +188,9 @@ export default function App() {
   const [searchSuggestions, setSearchSuggestions] = useState<Array<{ label: string; lat: number; lon: number; type: string }>>([]);
   const [navigationActive, setNavigationActive] = useState(false);
   const [followUser, setFollowUser] = useState(false);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsLastUpdate, setGpsLastUpdate] = useState<Date | null>(null);
+  const [gpsSpeed, setGpsSpeed] = useState<number | null>(null);
   const [mapStyle, setMapStyle] = useState<"satellite" | "hybrid" | "road">("satellite");
   const [remainingKm, setRemainingKm] = useState<number | null>(null);
   const [remainingMin, setRemainingMin] = useState<number | null>(null);
@@ -221,6 +224,8 @@ export default function App() {
   const offRouteCountRef = useRef<number>(0);
   const smoothHeadingRef = useRef<number>(0);
   const gpsMarkerRef = useRef<Cesium.PointPrimitive | null>(null);
+  const gpsAccuracyEntityRef = useRef<Cesium.Entity | null>(null);
+  const followUserRef = useRef<boolean>(false);
   const satLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const labelsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
   const handlePositionUpdateRef = useRef<(c: GeolocationCoordinates) => void>(() => {});
@@ -868,6 +873,9 @@ export default function App() {
       if (!viewer || !layers) return;
       const { latitude: lat, longitude: lon } = coords;
       setCurrentPosition({ lat, lon });
+      setGpsAccuracy(coords.accuracy ?? null);
+      setGpsLastUpdate(new Date());
+      setGpsSpeed(coords.speed != null && coords.speed >= 0 ? coords.speed : null);
 
       if (gpsMarkerRef.current) {
         gpsMarkerRef.current.position = Cesium.Cartesian3.fromDegrees(lon, lat, 50);
@@ -883,7 +891,24 @@ export default function App() {
         }) as Cesium.PointPrimitive;
       }
 
-      if (followUser) {
+      if (coords.accuracy != null && coords.accuracy < 5000) {
+        if (gpsAccuracyEntityRef.current) {
+          viewer.entities.remove(gpsAccuracyEntityRef.current);
+        }
+        gpsAccuracyEntityRef.current = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+          ellipse: {
+            semiMajorAxis: coords.accuracy,
+            semiMinorAxis: coords.accuracy,
+            material: Cesium.Color.fromCssColorString("#7af8d6").withAlpha(0.10),
+            outline: true,
+            outlineColor: Cesium.Color.fromCssColorString("#7af8d6").withAlpha(0.45),
+            outlineWidth: 1,
+          },
+        });
+      }
+
+      if (followUserRef.current) {
         const rc = routeCoordsRef.current;
         let heading = smoothHeadingRef.current;
         if (rc.length > 1) {
@@ -944,6 +969,10 @@ export default function App() {
         }
       }
     };
+  }, []);
+
+  useEffect(() => {
+    followUserRef.current = followUser;
   }, [followUser]);
 
   useEffect(() => {
@@ -996,7 +1025,27 @@ export default function App() {
     smoothHeadingRef.current = 0;
     gpsWatchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => handlePositionUpdateRef.current(coords),
-      (err) => console.error("[GPS watch]", err),
+      (err) => {
+        console.warn("[GPS watch]", err.code, err.message);
+        if (err.code === 1 /* PERMISSION_DENIED */) {
+          setGpsStatus("denied");
+          if (gpsWatchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+            gpsWatchIdRef.current = null;
+          }
+          const viewer = viewerRef.current;
+          if (viewer && gpsAccuracyEntityRef.current) {
+            viewer.entities.remove(gpsAccuracyEntityRef.current);
+            gpsAccuracyEntityRef.current = null;
+          }
+          setNavigationActive(false);
+          setFollowUser(false);
+          setRemainingKm(null);
+          setRemainingMin(null);
+          setNextStep(null);
+          setRerouteStatus("idle");
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10_000 },
     );
   }, []);
@@ -1006,18 +1055,30 @@ export default function App() {
       navigator.geolocation.clearWatch(gpsWatchIdRef.current);
       gpsWatchIdRef.current = null;
     }
+    const viewer = viewerRef.current;
+    if (viewer && gpsAccuracyEntityRef.current) {
+      viewer.entities.remove(gpsAccuracyEntityRef.current);
+      gpsAccuracyEntityRef.current = null;
+    }
     setNavigationActive(false);
     setFollowUser(false);
     setRemainingKm(null);
     setRemainingMin(null);
     setNextStep(null);
     setRerouteStatus("idle");
+    setGpsAccuracy(null);
+    setGpsSpeed(null);
   }, []);
 
   useEffect(() => {
     return () => {
       if (gpsWatchIdRef.current !== null) {
         navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      }
+      const viewer = viewerRef.current;
+      if (viewer && gpsAccuracyEntityRef.current) {
+        viewer.entities.remove(gpsAccuracyEntityRef.current);
+        gpsAccuracyEntityRef.current = null;
       }
     };
   }, []);
@@ -1051,10 +1112,15 @@ export default function App() {
           duration: 1.8,
         });
         setCurrentPosition({ lat: coords.latitude, lon: coords.longitude });
+        setGpsAccuracy(coords.accuracy ?? null);
+        setGpsLastUpdate(new Date());
         setGpsStatus("ready");
         viewer.scene.requestRender();
       },
-      () => setGpsStatus("denied"),
+      (err) => {
+        console.warn("[GPS locate]", err.code, err.message);
+        setGpsStatus("denied");
+      },
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
     );
   }, [lang]);
@@ -1273,7 +1339,27 @@ export default function App() {
               <span>{remainingMin !== null ? `${Math.round(remainingMin)} min` : "—"}</span>
             </div>
             <div className="nav-hud-controls">
-              <button type="button" className={`nav-hud-btn ${followUser ? "is-active" : ""}`} onClick={() => setFollowUser((f) => !f)} title={lang === "fr" ? "Centrer sur ma position" : "Follow my position"}>
+              <button
+                type="button"
+                className={`nav-hud-btn ${followUser ? "is-active" : ""}`}
+                title={followUser ? (lang === "fr" ? "Suivi actif — cliquer pour désactiver" : "Following — click to disable") : (lang === "fr" ? "Recentrer sur ma position" : "Re-center on my position")}
+                onClick={() => {
+                  setFollowUser((f) => {
+                    const next = !f;
+                    if (next && currentPosition) {
+                      const viewer = viewerRef.current;
+                      if (viewer) {
+                        viewer.camera.setView({
+                          destination: Cesium.Cartesian3.fromDegrees(currentPosition.lon, currentPosition.lat, 1800),
+                          orientation: { heading: Cesium.Math.toRadians(smoothHeadingRef.current), pitch: Cesium.Math.toRadians(-40), roll: 0 },
+                        });
+                        viewer.scene.requestRender();
+                      }
+                    }
+                    return next;
+                  });
+                }}
+              >
                 {followUser ? "⊙" : "◎"}
               </button>
               <button type="button" className="nav-hud-btn nav-hud-stop" onClick={stopNavigation} title={lang === "fr" ? "Arrêter la navigation" : "Stop navigation"}>✕</button>
@@ -1788,6 +1874,19 @@ export default function App() {
                   ? (lang === "fr" ? "Localisation…" : "Locating…")
                   : (lang === "fr" ? "Afficher ma position sur le globe" : "Show my position on the globe")}
               </button>
+              {gpsStatus === "ready" && (
+                <div className="gps-fix-info">
+                  {gpsAccuracy != null && (
+                    <span>{lang === "fr" ? `Précision : ±${Math.round(gpsAccuracy)} m` : `Accuracy: ±${Math.round(gpsAccuracy)} m`}</span>
+                  )}
+                  {gpsSpeed != null && (
+                    <span>{lang === "fr" ? `Vitesse : ${Math.round(gpsSpeed * 3.6)} km/h` : `Speed: ${Math.round(gpsSpeed * 3.6)} km/h`}</span>
+                  )}
+                  {gpsLastUpdate != null && (
+                    <span>{lang === "fr" ? `Mis à jour : ${gpsLastUpdate.toLocaleTimeString("fr-CA")}` : `Updated: ${gpsLastUpdate.toLocaleTimeString()}`}</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <label className="gps-destination">
