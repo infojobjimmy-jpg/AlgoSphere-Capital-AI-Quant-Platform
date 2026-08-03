@@ -165,8 +165,9 @@ Avant tout déploiement :
 
 Rollback vers la base de prod :
 ```bash
-# SHA de référence prod : e52bb16b0ee6d48db24009277b938d22891f3e03
-ops/deploy/rollback-service.sh --sha e52bb16b0ee6d48db24009277b938d22891f3e03 \
+# SHA de référence prod : 9c4aaa1a6cd2a6cee5e6bbf623cc72adaee28957 (2026-08-03 — trading cleanup)
+# SHA précédent : e52bb16b0ee6d48db24009277b938d22891f3e03
+ops/deploy/rollback-service.sh --sha 9c4aaa1a6cd2a6cee5e6bbf623cc72adaee28957 \
   --services api,frontend
 ```
 
