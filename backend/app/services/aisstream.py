@@ -37,8 +37,22 @@ def vessel_class(code: Any) -> str:
         return "other"
     if value == 30:
         return "fishing"
-    if value in {35, 51, 55, 58, 59}:
+    if value in {31, 32}:
+        return "towing"
+    if value in {35, 55, 56, 57, 59}:
         return "government"
+    if value == 36:
+        return "sailing"
+    if value == 37:
+        return "pleasure"
+    if 40 <= value <= 49:
+        return "highspeed"
+    if value in {50, 53, 54, 58}:
+        return "service"
+    if value == 51:
+        return "government"
+    if value == 52:
+        return "tug"
     if 60 <= value <= 69:
         return "passenger"
     if 70 <= value <= 79:
@@ -67,10 +81,12 @@ def normalize_message(message: dict[str, Any], known: dict[str, Any] | None = No
     body = message.get("Message") or {}
     report = next((v for v in body.values() if isinstance(v, dict)), {})
     ship_type = report.get("Type", report.get("TypeAndCargo"))
+    nav_status_raw = report.get("NavigationStatus")
     details = dict(known or {})
     if ship_type is not None:
         details["ship_type_code"] = ship_type
         details["ship_class"] = vessel_class(ship_type)
+    nav_status = int(nav_status_raw) if nav_status_raw is not None else None
     return {
         "id": f"mmsi_{mmsi}",
         "mmsi": str(mmsi),
@@ -80,6 +96,7 @@ def normalize_message(message: dict[str, Any], known: dict[str, Any] | None = No
         "sog_kn": report.get("Sog", report.get("SpeedOverGround")),
         "cog_deg": report.get("Cog", report.get("CourseOverGround")),
         "heading_deg": report.get("TrueHeading"),
+        "nav_status": nav_status,
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "ingest_type": "ship",
         "source": "aisstream",

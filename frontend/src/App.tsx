@@ -76,6 +76,28 @@ function colorForAltKm(altKm: number): Cesium.Color {
   return Cesium.Color.fromHsl(0.55 + 0.22 * t, 0.95, 0.55, 0.92);
 }
 
+const SHIP_COLORS: Record<string, string> = {
+  cargo: "#7af8d6", tanker: "#ffb703", passenger: "#ffd166",
+  fishing: "#a0e87a", government: "#ff6b9d", towing: "#4fd1ff",
+  tug: "#4fd1ff", service: "#b8bfff", sailing: "#e0aaff",
+  pleasure: "#e0aaff", highspeed: "#ffffff",
+};
+function colorForShipClass(cls: string, isMoving: boolean): Cesium.Color {
+  const hex = SHIP_COLORS[cls] ?? "#7af8d6";
+  return Cesium.Color.fromCssColorString(hex).withAlpha(isMoving ? 0.92 : 0.55);
+}
+
+const NAV_STATUS_LABELS: Record<number, string> = {
+  0: "Underway (engine)", 1: "At anchor", 2: "Not under command",
+  3: "Restricted manoeuvrability", 4: "Constrained by draught",
+  5: "Moored", 6: "Aground", 7: "Engaged in fishing",
+  8: "Underway (sailing)", 15: "Not defined",
+};
+function navStatusLabel(v: number | null): string {
+  if (v === null || v === undefined) return "—";
+  return NAV_STATUS_LABELS[v] ?? `Status ${v}`;
+}
+
 function colorForTempC(t: number | undefined): Cesium.Color {
   if (t === undefined || Number.isNaN(t)) return Cesium.Color.fromCssColorString("#4fd1ff");
   const u = Cesium.Math.clamp((t + 20) / 60, 0, 1);
@@ -246,6 +268,7 @@ export default function App() {
   const [showHeat, setShowHeat] = useState(true);
   const [shipClass, setShipClass] = useState("all");
   const [shipCountry, setShipCountry] = useState("all");
+  const [shipStatus, setShipStatus] = useState("all");
   const [aircraftClass, setAircraftClass] = useState("all");
   const [satCountry, setSatCountry] = useState("all");
   const [satFunction, setSatFunction] = useState("all");
@@ -728,14 +751,24 @@ export default function App() {
       for (const s of layers.ships ?? []) {
         if (shipClass !== "all" && String(s.ship_class ?? "other") !== shipClass) continue;
         if (shipCountry !== "all" && String(s.country ?? "Other") !== shipCountry) continue;
+        if (shipStatus !== "all") {
+          const sog = Number(s.sog_kn ?? -1);
+          const ns = s.nav_status != null ? Number(s.nav_status) : -1;
+          const moving = sog > 0.5 || ns === 0 || ns === 8;
+          if (shipStatus === "underway" && !moving) continue;
+          if (shipStatus === "moored" && moving) continue;
+        }
         const lat = Number(s.lat);
         const lon = Number(s.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        const sog = Number(s.sog_kn ?? -1);
+        const ns = s.nav_status != null ? Number(s.nav_status) : -1;
+        const isMoving = sog > 0.5 || ns === 0 || ns === 8;
         L.ships.add({
           id: { kind: "ship", data: s },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, 5),
-          color: Cesium.Color.fromCssColorString("#7af8d6").withAlpha(0.9),
-          pixelSize: 3,
+          color: colorForShipClass(String(s.ship_class ?? "other"), isMoving),
+          pixelSize: isMoving ? 4 : 3,
         });
       }
     }
@@ -827,7 +860,7 @@ export default function App() {
     }
 
     viewer.scene.requestRender();
-  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, shipClass, shipCountry, satCountry, satFunction, satOrbit]);
+  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, shipClass, shipCountry, shipStatus, satCountry, satFunction, satOrbit]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1522,14 +1555,38 @@ export default function App() {
             <details className="adv-filters">
               <summary className="adv-filters-summary">
                 {lang === "fr" ? "Filtres avancés" : "Advanced filters"}
-                {[shipClass, shipCountry, aircraftClass, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
-                  <span className="adv-filters-badge">{[shipClass, shipCountry, aircraftClass, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
+                {[shipClass, shipCountry, shipStatus, aircraftClass, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
+                  <span className="adv-filters-badge">{[shipClass, shipCountry, shipStatus, aircraftClass, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
                 ) : null}
               </summary>
               <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
-                <label>{lang === "fr" ? "Navires" : "Ships"}<select value={shipClass} disabled={authConfigured && !member} onChange={(e) => setShipClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="cargo">Cargo</option><option value="tanker">{lang === "fr" ? "Pétrolier" : "Tanker"}</option><option value="passenger">{lang === "fr" ? "Passagers" : "Passenger"}</option><option value="fishing">{lang === "fr" ? "Pêche" : "Fishing"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
-                <label>{lang === "fr" ? "Pavillon" : "Flag"}<select value={shipCountry} disabled={authConfigured && !member} onChange={(e) => setShipCountry(e.target.value)}><option value="all">{lang === "fr" ? "Tous les pays" : "All countries"}</option><option value="Canada">Canada</option><option value="USA">USA</option></select></label>
-                <label>{lang === "fr" ? "Avions" : "Aircraft"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+                <label>{lang === "fr" ? "Navires · type" : "Ships · type"}<select value={shipClass} disabled={authConfigured && !member} onChange={(e) => setShipClass(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option>
+                  <option value="cargo">Cargo</option>
+                  <option value="tanker">{lang === "fr" ? "Pétrolier" : "Tanker"}</option>
+                  <option value="passenger">{lang === "fr" ? "Passagers" : "Passenger"}</option>
+                  <option value="fishing">{lang === "fr" ? "Pêche" : "Fishing"}</option>
+                  <option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option>
+                  <option value="tug">{lang === "fr" ? "Remorqueur" : "Tug"}</option>
+                  <option value="towing">{lang === "fr" ? "Remorquage" : "Towing"}</option>
+                  <option value="service">{lang === "fr" ? "Service portuaire" : "Port service"}</option>
+                  <option value="sailing">{lang === "fr" ? "Voilier" : "Sailing"}</option>
+                  <option value="pleasure">{lang === "fr" ? "Plaisance" : "Pleasure craft"}</option>
+                  <option value="highspeed">{lang === "fr" ? "Grande vitesse" : "High speed"}</option>
+                  <option value="other">{lang === "fr" ? "Autre" : "Other"}</option>
+                </select></label>
+                <label>{lang === "fr" ? "Pavillon" : "Flag"}<select value={shipCountry} disabled={authConfigured && !member} onChange={(e) => setShipCountry(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Tous les pays" : "All countries"}</option>
+                  <option value="Canada">Canada</option>
+                  <option value="USA">USA</option>
+                  <option value="Other">{lang === "fr" ? "Autre pavillon" : "Other flag"}</option>
+                </select></label>
+                <label>{lang === "fr" ? "Navires · mouvement" : "Ships · movement"}<select value={shipStatus} disabled={authConfigured && !member} onChange={(e) => setShipStatus(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Tous" : "All"}</option>
+                  <option value="underway">{lang === "fr" ? "En route" : "Underway"}</option>
+                  <option value="moored">{lang === "fr" ? "Mouillé / amarré" : "Anchored / moored"}</option>
+                </select></label>
+                <label>{lang === "fr" ? "Avions · type" : "Aircraft · type"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
                 <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Orbite" : "Orbit"}<select value={satOrbit} disabled={authConfigured && !member} onChange={(e) => setSatOrbit(e.target.value)}><option value="all">{lang === "fr" ? "Toutes" : "All"}</option><option value="LEO">LEO</option><option value="MEO">MEO</option><option value="GEO">GEO</option></select></label>
@@ -2051,7 +2108,17 @@ export default function App() {
               {Object.entries(selectedFeature.data)
                 .filter(([key, value]) => value !== null && value !== undefined && !["preview_url", "stream_url", "info_url", "importance", "license"].includes(key))
                 .slice(0, 18)
-                .map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{typeof value === "boolean" ? (value ? (lang === "fr" ? "Oui" : "Yes") : (lang === "fr" ? "Non" : "No")) : String(value)}</dd></div>)}
+                .map(([key, value]) => {
+                  let display: string;
+                  if (typeof value === "boolean") {
+                    display = value ? (lang === "fr" ? "Oui" : "Yes") : (lang === "fr" ? "Non" : "No");
+                  } else if (key === "nav_status" && selectedFeature.kind === "ship") {
+                    display = navStatusLabel(value === null ? null : Number(value));
+                  } else {
+                    display = String(value);
+                  }
+                  return <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{display}</dd></div>;
+                })}
             </dl>
             {selectedFeature.kind === "camera" && selectedFeature.data.info_url ? (
               <a className="subscription-cta feature-open-link" href={String(selectedFeature.data.info_url)} target="_blank" rel="noreferrer">
