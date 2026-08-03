@@ -29,3 +29,10 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+
+# Local dev tools / screenshots / backups — not part of the deployable source
+ops/
+backups/
+gps-test-screenshots/
+pw-test/
+backend/get_product_url.py
