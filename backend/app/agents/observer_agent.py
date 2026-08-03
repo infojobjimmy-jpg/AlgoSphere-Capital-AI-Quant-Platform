@@ -21,15 +21,12 @@ from typing import Any, AsyncIterator
 logger = logging.getLogger("acap.observer_agent")
 
 _INSIGHT_COOLDOWN_SEC = 120.0
-_NO_TRADE_WARN_SEC = 600.0
-_NO_TRADE_SEVERE_SEC = 1_800.0
 
 
 @dataclass
 class _ObserverState:
-    """Process-local state for dedupe and trading-activity heuristics."""
+    """Process-local state for insight deduplication."""
 
-    last_trade_mono: float = field(default_factory=time.monotonic)
     last_insight_mono: dict[str, float] = field(default_factory=dict)
 
 
@@ -54,11 +51,6 @@ def _analyze_line(line: str, state: _ObserverState) -> None:
         return
 
     low = s.lower()
-
-    if "trade decision" in low or ('"decision"' in low and "trading_agent" in low):
-        state.last_trade_mono = time.monotonic()
-    if low.startswith("trade:") or "trading_agent signal" in low:
-        state.last_trade_mono = time.monotonic()
 
     if re.search(r"kafka.*not ready|not ready.*kafka", low):
         _emit_insight(
@@ -127,54 +119,6 @@ def _analyze_line(line: str, state: _ObserverState) -> None:
             },
         )
 
-    if "paper trade skipped" in low:
-        if "drawdown" in low:
-            _emit_insight(
-                state,
-                {
-                    "issue": "Paper trades skipped due to drawdown gate",
-                    "severity": "low",
-                    "suggestion": "Expected protective behavior; review risk thresholds only if policy "
-                    "should change.",
-                    "source_line_hint": s[:240],
-                },
-            )
-        elif "kill_switch" in low or "kill switch" in low:
-            _emit_insight(
-                state,
-                {
-                    "issue": "Trading kill switch engaged",
-                    "severity": "medium",
-                    "suggestion": "Confirm TRADING_KILL_SWITCH / Redis kill key is intentional before "
-                    "expecting new paper orders.",
-                    "source_line_hint": s[:240],
-                },
-            )
-
-
-def _periodic_checks(state: _ObserverState) -> None:
-    now = time.monotonic()
-    idle = now - state.last_trade_mono
-    if idle > _NO_TRADE_SEVERE_SEC:
-        _emit_insight(
-            state,
-            {
-                "issue": "No trading activity for an extended period",
-                "severity": "medium",
-                "suggestion": "Verify market_crypto telemetry is flowing, trading_agent is running, and "
-                "signal rules still see sufficient ticks.",
-            },
-        )
-    elif idle > _NO_TRADE_WARN_SEC:
-        _emit_insight(
-            state,
-            {
-                "issue": "Low trading log activity",
-                "severity": "low",
-                "suggestion": "If intentional (quiet market), no action. Otherwise confirm Kafka topic "
-                "acap.telemetry and trading_agent consumer group.",
-            },
-        )
 
 
 def _log_paths_from_env() -> list[Path]:
@@ -244,12 +188,6 @@ async def _merge_sources(paths: list[Path]) -> AsyncIterator[str]:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def _periodic_loop(state: _ObserverState) -> None:
-    while True:
-        await asyncio.sleep(30.0)
-        _periodic_checks(state)
-
-
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     paths = _log_paths_from_env()
@@ -261,7 +199,7 @@ async def main() -> None:
                     "issue": "observer_no_input_configured",
                     "severity": "low",
                     "suggestion": "Pipe container logs on stdin, e.g. "
-                    "`docker compose logs -f kafka ingestion trading 2>&1 | python -m app.agents.observer_agent`, "
+                    "`docker compose logs -f kafka ingestion 2>&1 | python -m app.agents.observer_agent`, "
                     "or set OBSERVER_LOG_FILES to comma-separated file paths readable from this process.",
                     "observed_at": _now_iso(),
                 },
@@ -271,16 +209,8 @@ async def main() -> None:
         return
 
     state = _ObserverState()
-    ticker = asyncio.create_task(_periodic_loop(state))
-    try:
-        async for line in _merge_sources(paths):
-            _analyze_line(line, state)
-    finally:
-        ticker.cancel()
-        try:
-            await ticker
-        except asyncio.CancelledError:
-            pass
+    async for line in _merge_sources(paths):
+        _analyze_line(line, state)
 
 
 if __name__ == "__main__":

@@ -35,9 +35,7 @@ def _allowed_cmd(line: str) -> list[str] | None:
     if not key:
         return None
     mapping: dict[str, list[str]] = {
-        "restart trading": ["docker", "compose", "restart", "trading"],
         "restart ingestion": ["docker", "compose", "restart", "ingestion"],
-        "show trading logs": ["docker", "compose", "logs", "--tail", "100", "trading"],
         "show ingestion logs": ["docker", "compose", "logs", "--tail", "100", "ingestion"],
         "status": ["docker", "compose", "ps"],
     }
@@ -90,15 +88,7 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logger.info(
         "task_agent ready; allowed: %s",
-        "; ".join(
-            [
-                "restart trading",
-                "restart ingestion",
-                "show trading logs",
-                "show ingestion logs",
-                "status",
-            ]
-        ),
+        "; ".join(["restart ingestion", "show ingestion logs", "status"]),
     )
     async for line in _stdin_lines():
         argv = _allowed_cmd(line)

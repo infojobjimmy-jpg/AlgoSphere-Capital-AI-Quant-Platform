@@ -43,35 +43,6 @@ def _severity_weight(sev: str) -> float:
     return 0.1
 
 
-def _market_quality(layers: dict[str, Any]) -> tuple[float, list[str]]:
-    """
-    Market quality score in [0,1] from cross-asset breadth and quote availability.
-    """
-    crypto = layers.get("market_crypto") or []
-    fx = layers.get("market_forex") or []
-    eq = layers.get("market_equities") or []
-    sources: list[str] = []
-    breadth = 0.0
-    if crypto:
-        breadth += 0.40
-        sources.append("market_crypto")
-    if fx:
-        breadth += 0.30
-        sources.append("market_forex")
-    if eq:
-        breadth += 0.30
-        sources.append("market_equities")
-    priced = 0
-    for row in (crypto[:6] + fx[:4] + eq[:4]):
-        try:
-            if float(row.get("price", 0.0)) > 0:
-                priced += 1
-        except (TypeError, ValueError):
-            continue
-    quality = min(1.0, breadth + min(0.2, 0.02 * priced))
-    return quality, sources
-
-
 def run_strategic_agent(ctx: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     """
     Operator-grade decisioning over fused context.
@@ -88,8 +59,6 @@ def run_strategic_agent(ctx: dict[str, Any]) -> tuple[list[dict[str, Any]], list
     alerts = ctx.get("alerts") or []
     investigations = ctx.get("investigations") or []
     insights = ctx.get("insights") or []
-    correlations = ctx.get("correlations") or []
-    layers = ctx.get("layers") or {}
 
     minute_bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
     decisions: list[StrategicDecision] = []
@@ -187,49 +156,6 @@ def run_strategic_agent(ctx: dict[str, Any]) -> tuple[list[dict[str, Any]], list
 
     if insights:
         trace.append(f"StrategicAgent: incorporated {len(insights)} narrator insight(s) into posture.")
-
-    # Trading strategy overlay: combine anomaly load + correlations + market breadth.
-    anomaly_load = min(1.0, sum(_severity_weight(str(e.get("severity", "low"))) for e in events[:30]) / 12.0)
-    corr_strength = 0.0
-    corr_n = 0
-    for c in correlations[:8]:
-        try:
-            corr_strength += max(0.0, min(1.0, float(c.get("score", 0.0))))
-            corr_n += 1
-        except (TypeError, ValueError):
-            continue
-    corr_signal = (corr_strength / corr_n) if corr_n else 0.0
-    market_quality, market_sources = _market_quality(layers)
-    trade_quality = max(0.0, min(1.0, 0.45 * anomaly_load + 0.30 * corr_signal + 0.25 * market_quality + boost))
-    trace.append(
-        "StrategicAgent: trade_quality="
-        f"{trade_quality:.3f} (anomaly={anomaly_load:.3f}, corr={corr_signal:.3f}, market={market_quality:.3f})."
-    )
-    if trade_quality >= 0.60:
-        decisions.append(
-            StrategicDecision(
-                event_id=f"trade:{minute_bucket}",
-                severity="high" if trade_quality >= 0.75 else "medium",
-                action="TRADING_SIGNAL_QUALITY_LONG_BIAS",
-                confidence=min(0.95, 0.55 + 0.35 * trade_quality),
-                rationale=(
-                    "Composite strategist score indicates strong cross-source alignment "
-                    f"(anomaly {anomaly_load:.2f}, correlation {corr_signal:.2f}, market {market_quality:.2f})."
-                ),
-                sources=["anomaly", "correlation", *market_sources],
-            )
-        )
-    elif anomaly_load >= 0.7:
-        decisions.append(
-            StrategicDecision(
-                event_id=f"trade:risk:{minute_bucket}",
-                severity="high",
-                action="TRADING_SIGNAL_DE_RISK",
-                confidence=min(0.9, 0.50 + 0.30 * anomaly_load),
-                rationale="Anomaly load elevated beyond safe execution envelope; reduce exposure.",
-                sources=["anomaly"],
-            )
-        )
 
     trace.append(f"StrategicAgent: emitted {len(decisions)} decision(s).")
     out = [
