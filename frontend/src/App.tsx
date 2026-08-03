@@ -317,6 +317,7 @@ export default function App() {
   const [showTransit, setShowTransit] = useState(true);
   const [transitClass, setTransitClass] = useState("all");
   const [showLprPanel, setShowLprPanel] = useState(false);
+  const [showFacialPanel, setShowFacialPanel] = useState(false);
   const [shipClass, setShipClass] = useState("all");
   const [shipCountry, setShipCountry] = useState("all");
   const [shipStatus, setShipStatus] = useState("all");
@@ -1667,6 +1668,17 @@ export default function App() {
                 <input type="checkbox" disabled checked={false} readOnly tabIndex={-1} aria-hidden="true" />
                 {lang === "fr" ? "Plaques d'immatriculation" : "License plates"}
               </label>
+              <label
+                className="toggle toggle--legal-lock"
+                title={lang === "fr" ? "Données biométriques — autorisation légale stricte requise" : "Biometric data — strict legal authorization required"}
+                onClick={(e) => { e.preventDefault(); setShowFacialPanel(true); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowFacialPanel(true); } }}
+                tabIndex={0}
+                role="button"
+              >
+                <input type="checkbox" disabled checked={false} readOnly tabIndex={-1} aria-hidden="true" />
+                {lang === "fr" ? "Reconnaissance faciale" : "Facial recognition"}
+              </label>
             </div>
             <details className="adv-filters">
               <summary className="adv-filters-summary">
@@ -2266,6 +2278,60 @@ export default function App() {
               {lang === "fr"
                 ? "Pour activer cette couche, configurez LPR_PROVIDER_API_KEY et fournissez la documentation légale requise à l'administrateur de l'organisation."
                 : "To activate this layer, set LPR_PROVIDER_API_KEY and provide the required legal documentation to your organization administrator."}
+            </p>
+          </section>
+        </div>
+      ) : null}
+      {showFacialPanel ? (
+        <div className="gps-backdrop" role="presentation" onMouseDown={() => setShowFacialPanel(false)}>
+          <section
+            className="gps-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "fr" ? "Reconnaissance faciale" : "Facial recognition"}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button type="button" className="subscription-close" onClick={() => setShowFacialPanel(false)} aria-label={lang === "fr" ? "Fermer" : "Close"}>×</button>
+            <div className="subscription-kicker">AUTHORIZATION_REQUIRED · BIOMETRIC</div>
+            <h2>{lang === "fr" ? "Reconnaissance faciale" : "Facial recognition"}</h2>
+            <p className="subscription-lead">
+              {lang === "fr"
+                ? "Les données biométriques facialesont une catégorie de données personnelles sensibles soumise aux protections les plus strictes en droit de la vie privée. Cette couche est verrouillée jusqu'à satisfaire l'ensemble des exigences légales, éthiques et contractuelles."
+                : "Facial biometric data is a special category of personal data subject to the strictest privacy law protections. This layer is locked until all legal, ethical, and contractual requirements are satisfied."}
+            </p>
+
+            <div className="source-status-banner" role="status">
+              <strong>{lang === "fr" ? "Aucune donnée biométrique traitée — autorisation légale stricte requise" : "No biometric data processed — strict legal authorization required"}</strong>
+              <span>
+                {lang === "fr"
+                  ? "Aucun visage, identité ou gabarit biométrique n'est capturé, traité ou stocké. Aucune donnée fictive ne remplace la source."
+                  : "No face image, identity or biometric template is captured, processed or stored. No synthetic data replaces the source."}
+              </span>
+            </div>
+
+            <div className="gps-feature-grid">
+              <article>
+                <strong>{lang === "fr" ? "Cadre légal biométrique" : "Biometric legal framework"}</strong>
+                <span>{lang === "fr" ? "Conformité documentée avec BIPA, GDPR Art. 9, Loi 25 (Québec), PIPEDA et lois provinciales applicables avant toute activation." : "Documented compliance with BIPA, GDPR Art. 9, Law 25 (Quebec), PIPEDA and applicable state/provincial laws before any activation."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Consentement éclairé explicite" : "Explicit informed consent"}</strong>
+                <span>{lang === "fr" ? "Consentement explicite de chaque personne identifiable, collecté selon les exigences légales de chaque juridiction concernée." : "Explicit consent from each identifiable individual, collected per legal requirements of each applicable jurisdiction."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Évaluation d'impact sur la vie privée" : "Privacy impact assessment"}</strong>
+                <span>{lang === "fr" ? "Évaluation des facteurs relatifs à la vie privée (EFVP) complète, soumise et approuvée par l'autorité compétente avant déploiement." : "Full Privacy Impact Assessment (PIA) completed, filed and approved by the competent authority before deployment."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Contrat fournisseur et audit éthique" : "Provider contract and ethics audit"}</strong>
+                <span>{lang === "fr" ? "Contrat avec un fournisseur accrédité et audit algorithmique indépendant documentant biais, précision et usages interdits." : "Contract with an accredited provider and independent algorithmic audit documenting bias, accuracy and prohibited uses."}</span>
+              </article>
+            </div>
+
+            <p className="gps-safety">
+              {lang === "fr"
+                ? "Pour activer cette couche, fournissez la documentation légale complète à l'administrateur de l'organisation. Aucune activation sans approbation juridique et éthique écrite."
+                : "To activate this layer, provide complete legal documentation to your organization administrator. No activation without written legal and ethics approval."}
             </p>
           </section>
         </div>
