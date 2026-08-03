@@ -72,7 +72,6 @@ services:
     volumes:
       - timescale_data:/var/lib/postgresql/data
       - ./infra/sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./infra/sql/algosphere_trading.sql:/docker-entrypoint-initdb.d/02-trading.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gaios -d gaios -h 127.0.0.1 -p 5432"]
       interval: 5s
@@ -292,29 +291,6 @@ services:
       kafka:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
-
-  trading:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: always
-    networks:
-      - backend
-    command: python -m app.agents.trading_agent
-    env_file:
-      - ./backend/.env.example
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
-      REDIS_URL: redis://redis:6379/0
-      CHROMA_HOST: chromadb
-      CHROMA_PORT: "8000"
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      api:
         condition: service_healthy
 
   observer:

@@ -21,8 +21,7 @@ from app.services.whop_fulfillment import (
     seed_initial_fulfillments,
     whop_reconciliation_poller,
 )
-from app.routers import navigation, self_code, system, trading
-from app.market_hub_bus import market_hub_broadcaster
+from app.routers import navigation, self_code, system
 from app.websocket_manager import ConnectionManager
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -56,9 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await seed_initial_fulfillments()
     poller = asyncio.create_task(redis_snapshot_poller())
     reconciler = asyncio.create_task(whop_reconciliation_poller())
-    await market_hub_broadcaster.start()
     yield
-    await market_hub_broadcaster.stop()
     for task in (poller, reconciler):
         task.cancel()
         try:
@@ -133,22 +130,7 @@ app.include_router(goals.router, prefix="/goals", tags=["goals"])
 app.include_router(metrics_router.router, prefix="/intel", tags=["intel"])
 app.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 if not settings.public_geospatial_mode:
-    app.include_router(trading.router, prefix="/trading", tags=["trading"])
     app.include_router(self_code.router, prefix="/self-code", tags=["self-code"])
-
-
-@app.websocket("/ws/market-hub")
-async def websocket_market_hub(ws: WebSocket) -> None:
-    await ws.accept()
-    await market_hub_broadcaster.register(ws)
-    try:
-        await market_hub_broadcaster.send_immediate(ws)
-        while True:
-            await ws.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        await market_hub_broadcaster.unregister(ws)
 
 
 @app.websocket("/ws/live")

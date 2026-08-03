@@ -159,11 +159,9 @@ export default function SocialPanel({ lang, currentPosition, onLocate, onFocusPe
             ) : (
               <div className="social-presence-controls">
                 <button type="button" onClick={requestLocationConsent}>
-                  {locationConsent === "awaiting_gps"
-                    ? (fr ? "En attente…" : "Waiting…")
-                    : currentPosition
-                      ? (fr ? "Partager ma position" : "Share my position")
-                      : (fr ? "Activer le GPS" : "Enable GPS")}
+                  {currentPosition
+                    ? (fr ? "Partager ma position" : "Share my position")
+                    : (fr ? "Activer le GPS" : "Enable GPS")}
                 </button>
               </div>
             )}
