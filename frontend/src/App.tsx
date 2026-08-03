@@ -316,6 +316,7 @@ export default function App() {
   const [showHeat, setShowHeat] = useState(true);
   const [showTransit, setShowTransit] = useState(true);
   const [transitClass, setTransitClass] = useState("all");
+  const [showLprPanel, setShowLprPanel] = useState(false);
   const [shipClass, setShipClass] = useState("all");
   const [shipCountry, setShipCountry] = useState("all");
   const [shipStatus, setShipStatus] = useState("all");
@@ -1655,6 +1656,17 @@ export default function App() {
                 <input type="checkbox" checked={showTransit} onChange={(e) => setShowTransit(e.target.checked)} />
                 {lang === "fr" ? "Véhicules de transit" : "Transit vehicles"}
               </label>
+              <label
+                className="toggle toggle--legal-lock"
+                title={lang === "fr" ? "Autorisation légale requise — cliquez pour en savoir plus" : "Legal authorization required — click to learn more"}
+                onClick={(e) => { e.preventDefault(); setShowLprPanel(true); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowLprPanel(true); } }}
+                tabIndex={0}
+                role="button"
+              >
+                <input type="checkbox" disabled checked={false} readOnly tabIndex={-1} aria-hidden="true" />
+                {lang === "fr" ? "Plaques d'immatriculation" : "License plates"}
+              </label>
             </div>
             <details className="adv-filters">
               <summary className="adv-filters-summary">
@@ -2200,6 +2212,60 @@ export default function App() {
               {lang === "fr"
                 ? "Déploiement progressif avec données publiques vérifiées. Les panneaux routiers et consignes officielles demeurent prioritaires."
                 : "Progressive rollout using verified public data. Posted road signs and official directions always take priority."}
+            </p>
+          </section>
+        </div>
+      ) : null}
+      {showLprPanel ? (
+        <div className="gps-backdrop" role="presentation" onMouseDown={() => setShowLprPanel(false)}>
+          <section
+            className="gps-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lang === "fr" ? "Reconnaissance de plaques d'immatriculation" : "License plate recognition"}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button type="button" className="subscription-close" onClick={() => setShowLprPanel(false)} aria-label={lang === "fr" ? "Fermer" : "Close"}>×</button>
+            <div className="subscription-kicker">AUTHORIZATION_REQUIRED</div>
+            <h2>{lang === "fr" ? "Plaques d'immatriculation" : "License plates"}</h2>
+            <p className="subscription-lead">
+              {lang === "fr"
+                ? "Cette couche afficherait des positions de véhicules associées à des données de plaque d'immatriculation issues d'un fournisseur de RAPI autorisé. Elle est verrouillée jusqu'à ce que l'ensemble des conditions légales et contractuelles soient satisfaites."
+                : "This layer would display vehicle positions associated with license plate data from an authorized ALPR provider. It is locked until all legal and contractual requirements are met."}
+            </p>
+
+            <div className="source-status-banner" role="status">
+              <strong>{lang === "fr" ? "Source non configurée — autorisation légale requise" : "Source not configured — legal authorization required"}</strong>
+              <span>
+                {lang === "fr"
+                  ? "Aucune donnée de plaque n'est récupérée, stockée ou affichée sans autorisation explicite. Aucune donnée fictive ne remplace la source."
+                  : "No plate data is fetched, stored or displayed without explicit authorization. No synthetic data replaces the source."}
+              </span>
+            </div>
+
+            <div className="gps-feature-grid">
+              <article>
+                <strong>{lang === "fr" ? "Contrat fournisseur officiel" : "Official provider contract"}</strong>
+                <span>{lang === "fr" ? "Contrat API avec un fournisseur de RAPI accrédité (PIPS, Vigilant, Motorola ou équivalent gouvernemental)." : "API contract with an accredited ALPR provider (PIPS, Vigilant, Motorola, or government equivalent)."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Révision juridique" : "Legal review"}</strong>
+                <span>{lang === "fr" ? "Avis d'un conseiller juridique accrédité — conformité avec la Loi sur la protection des renseignements personnels et PIPEDA." : "Review by licensed legal counsel — compliance with Privacy Act and PIPEDA / state equivalents."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Politique d'utilisation acceptable" : "Acceptable use policy"}</strong>
+                <span>{lang === "fr" ? "Politique d'utilisation approuvée limitant la recherche aux usages opérationnels autorisés par la loi." : "Approved use policy restricting queries to operationally authorized, lawful purposes only."}</span>
+              </article>
+              <article>
+                <strong>{lang === "fr" ? "Audit de conformité" : "Compliance audit"}</strong>
+                <span>{lang === "fr" ? "Audit de conformité aux lois provinciales et fédérales sur la vie privée avant toute activation en production." : "Privacy compliance audit against provincial and federal laws before any production activation."}</span>
+              </article>
+            </div>
+
+            <p className="gps-safety">
+              {lang === "fr"
+                ? "Pour activer cette couche, configurez LPR_PROVIDER_API_KEY et fournissez la documentation légale requise à l'administrateur de l'organisation."
+                : "To activate this layer, set LPR_PROVIDER_API_KEY and provide the required legal documentation to your organization administrator."}
             </p>
           </section>
         </div>
