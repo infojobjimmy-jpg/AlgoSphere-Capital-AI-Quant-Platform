@@ -174,7 +174,18 @@ Images buildées le 2026-08-03 matin, trading déjà retiré. `git.commit=unknow
 # Sur le VPS — /opt/algosphere
 docker tag algosphere-api:rollback-20260803-134459 algosphere-api:latest
 docker tag algosphere-frontend:rollback-20260803-134459 algosphere-frontend:latest
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --no-build api frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+  --force-recreate --no-deps --no-build api frontend
+```
+
+Vérification après rollback :
+```bash
+# Confirmer les images réellement utilisées
+docker inspect algosphere-api-1 --format '{{index .Config.Labels "com.algosphere.git.commit"}} {{.Image}}'
+docker inspect algosphere-frontend-1 --format '{{index .Config.Labels "com.algosphere.git.commit"}} {{.Image}}'
+# État healthy et health checks
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'api|frontend'
+curl -s https://algosphereglobal.com/api/system/health
 ```
 
 **Rollback Git d'urgence (dernier recours) :**
