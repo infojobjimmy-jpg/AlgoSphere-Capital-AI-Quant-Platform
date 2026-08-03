@@ -98,6 +98,22 @@ function navStatusLabel(v: number | null): string {
   return NAV_STATUS_LABELS[v] ?? `Status ${v}`;
 }
 
+const SQUAWK_LABELS: Record<string, string> = {
+  "7500": "HIJACK",
+  "7600": "LOST COMMS",
+  "7700": "EMERGENCY",
+  "1200": "VFR",
+  "2000": "IFR en route",
+};
+const EMERGENCY_SQUAWKS = new Set(["7500", "7600", "7700"]);
+
+const FLIGHT_PHASE_LABELS: Record<string, { fr: string; en: string }> = {
+  ground:  { fr: "Au sol",           en: "On ground" },
+  low:     { fr: "Basse altitude",   en: "Low altitude" },
+  medium:  { fr: "Montée / descente", en: "Climbing / descending" },
+  high:    { fr: "Croisière",        en: "Cruise" },
+};
+
 function colorForTempC(t: number | undefined): Cesium.Color {
   if (t === undefined || Number.isNaN(t)) return Cesium.Color.fromCssColorString("#4fd1ff");
   const u = Cesium.Math.clamp((t + 20) / 60, 0, 1);
@@ -270,6 +286,7 @@ export default function App() {
   const [shipCountry, setShipCountry] = useState("all");
   const [shipStatus, setShipStatus] = useState("all");
   const [aircraftClass, setAircraftClass] = useState("all");
+  const [aircraftPhase, setAircraftPhase] = useState("all");
   const [satCountry, setSatCountry] = useState("all");
   const [satFunction, setSatFunction] = useState("all");
   const [satOrbit, setSatOrbit] = useState("all");
@@ -688,8 +705,22 @@ export default function App() {
     if (showAircraft) {
       const mem = trailMemRef.current;
       const alive = new Set<string>();
+
+      const aircraftVisible = (a: Record<string, unknown>): boolean => {
+        if (aircraftClass !== "all" && String(a.aircraft_class ?? "other") !== aircraftClass) return false;
+        if (aircraftPhase !== "all") {
+          const phase = a.flight_phase != null
+            ? String(a.flight_phase)
+            : a.on_ground === true ? "ground"
+            : a.alt_m != null ? (Number(a.alt_m) < 3000 ? "low" : Number(a.alt_m) < 7500 ? "medium" : "high")
+            : null;
+          if (phase !== aircraftPhase) return false;
+        }
+        return true;
+      };
+
       for (const a of layers.aircraft ?? []) {
-        if (aircraftClass !== "all" && String(a.aircraft_class ?? "other") !== aircraftClass) continue;
+        if (!aircraftVisible(a)) continue;
         const id = String(a.id ?? "");
         if (id) alive.add(id);
       }
@@ -700,6 +731,7 @@ export default function App() {
       }
 
       for (const a of layers.aircraft ?? []) {
+        if (!aircraftVisible(a)) continue;
         const lat = Number(a.lat);
         const lon = Number(a.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
@@ -714,20 +746,26 @@ export default function App() {
           while (arr.length > 14) arr.shift();
           mem.set(id, arr);
         }
-        const glow = Cesium.Color.fromHsl(0.56, 0.95, 0.55 + 0.12 * imp, 0.15 + 0.55 * imp);
-        const base = colorForAltKm(altKm);
+        const isEmergency = EMERGENCY_SQUAWKS.has(String(a.squawk ?? ""));
+        const glow = isEmergency
+          ? Cesium.Color.fromCssColorString("#ff2d55").withAlpha(0.9)
+          : Cesium.Color.fromHsl(0.56, 0.95, 0.55 + 0.12 * imp, 0.15 + 0.55 * imp);
+        const base = isEmergency
+          ? Cesium.Color.fromCssColorString("#ff2d55")
+          : colorForAltKm(altKm);
         const tint = base.withAlpha(Cesium.Math.clamp(0.72 + 0.22 * imp, 0.55, 0.98));
         L.aircraft.add({
           id: { kind: "aircraft", data: a },
           position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(200, alt)),
           color: tint,
-          pixelSize: 2.0 + imp * 7.0,
+          pixelSize: isEmergency ? 10.0 : 2.0 + imp * 7.0,
           outlineColor: glow,
-          outlineWidth: imp > 0.62 ? 3.0 : 1.0,
+          outlineWidth: isEmergency ? 4.0 : imp > 0.62 ? 3.0 : 1.0,
         });
       }
 
       const scored = [...(layers.aircraft ?? [])]
+        .filter((a) => aircraftVisible(a))
         .map((a) => ({ a, imp: Number(a.importance ?? 0) }))
         .sort((x, y) => y.imp - x.imp)
         .slice(0, 1800);
@@ -860,7 +898,7 @@ export default function App() {
     }
 
     viewer.scene.requestRender();
-  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, shipClass, shipCountry, shipStatus, satCountry, satFunction, satOrbit]);
+  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, aircraftPhase, shipClass, shipCountry, shipStatus, satCountry, satFunction, satOrbit]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1555,8 +1593,8 @@ export default function App() {
             <details className="adv-filters">
               <summary className="adv-filters-summary">
                 {lang === "fr" ? "Filtres avancés" : "Advanced filters"}
-                {[shipClass, shipCountry, shipStatus, aircraftClass, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
-                  <span className="adv-filters-badge">{[shipClass, shipCountry, shipStatus, aircraftClass, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
+                {[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
+                  <span className="adv-filters-badge">{[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
                 ) : null}
               </summary>
               <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
@@ -1586,7 +1624,22 @@ export default function App() {
                   <option value="underway">{lang === "fr" ? "En route" : "Underway"}</option>
                   <option value="moored">{lang === "fr" ? "Mouillé / amarré" : "Anchored / moored"}</option>
                 </select></label>
-                <label>{lang === "fr" ? "Avions · type" : "Aircraft · type"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}><option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option><option value="commercial">Commercial</option><option value="cargo">Cargo</option><option value="private">{lang === "fr" ? "Privé" : "Private"}</option><option value="emergency">{lang === "fr" ? "Urgence" : "Emergency"}</option><option value="government">{lang === "fr" ? "Gouvernemental" : "Government"}</option></select></label>
+                <label>{lang === "fr" ? "Avions · type" : "Aircraft · type"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="cargo">Cargo</option>
+                  <option value="private">{lang === "fr" ? "Privé / VFR" : "Private / VFR"}</option>
+                  <option value="emergency">{lang === "fr" ? "Urgence (7500–7700)" : "Emergency (7500–7700)"}</option>
+                  <option value="government">{lang === "fr" ? "Gouvernemental / Militaire" : "Government / Military"}</option>
+                  <option value="other">{lang === "fr" ? "Non classifié" : "Unclassified"}</option>
+                </select></label>
+                <label>{lang === "fr" ? "Avions · phase de vol" : "Aircraft · flight phase"}<select value={aircraftPhase} disabled={authConfigured && !member} onChange={(e) => setAircraftPhase(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Toutes" : "All"}</option>
+                  <option value="ground">{lang === "fr" ? "Au sol" : "On ground"}</option>
+                  <option value="low">{lang === "fr" ? "Basse altitude (< 3 000 m)" : "Low altitude (< 3 000 m)"}</option>
+                  <option value="medium">{lang === "fr" ? "Montée / descente" : "Climbing / descending"}</option>
+                  <option value="high">{lang === "fr" ? "Croisière (> 7 500 m)" : "Cruise (> 7 500 m)"}</option>
+                </select></label>
                 <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Orbite" : "Orbit"}<select value={satOrbit} disabled={authConfigured && !member} onChange={(e) => setSatOrbit(e.target.value)}><option value="all">{lang === "fr" ? "Toutes" : "All"}</option><option value="LEO">LEO</option><option value="MEO">MEO</option><option value="GEO">GEO</option></select></label>
@@ -2114,6 +2167,13 @@ export default function App() {
                     display = value ? (lang === "fr" ? "Oui" : "Yes") : (lang === "fr" ? "Non" : "No");
                   } else if (key === "nav_status" && selectedFeature.kind === "ship") {
                     display = navStatusLabel(value === null ? null : Number(value));
+                  } else if (key === "squawk" && selectedFeature.kind === "aircraft") {
+                    const sq = String(value);
+                    const lbl = SQUAWK_LABELS[sq];
+                    display = lbl ? `${sq} — ${lbl}` : sq;
+                  } else if (key === "flight_phase" && selectedFeature.kind === "aircraft") {
+                    const p = FLIGHT_PHASE_LABELS[String(value)];
+                    display = p ? (lang === "fr" ? p.fr : p.en) : String(value);
                   } else {
                     display = String(value);
                   }

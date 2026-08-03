@@ -2,10 +2,39 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+
+_AIRLINE_CALLSIGN = re.compile(r"^[A-Z]{3}\d{1,4}[A-Z]?$")
+_EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
+
+
+def _aircraft_class_from(callsign: str, squawk: str | None) -> str | None:
+    sq = str(squawk or "").strip()
+    if sq in _EMERGENCY_SQUAWKS:
+        return "emergency"
+    if sq == "1200":
+        return "private"
+    if callsign and _AIRLINE_CALLSIGN.match(callsign):
+        return "commercial"
+    return None
+
+
+def _flight_phase(baro_alt: Any, on_ground: bool) -> str | None:
+    if on_ground:
+        return "ground"
+    try:
+        alt = float(baro_alt)
+    except (TypeError, ValueError):
+        return None
+    if alt < 3_000:
+        return "low"
+    if alt < 7_500:
+        return "medium"
+    return "high"
 
 logger = logging.getLogger(__name__)
 
@@ -93,22 +122,28 @@ def _parse_states(data: Any) -> list[dict[str, Any]]:
         except (TypeError, ValueError):
             continue
         obs = _iso_from_unix(time_pos if time_pos is not None else last_contact)
-        out.append(
-            {
-                "id": str(icao24),
-                "callsign": callsign or str(icao24),
-                "lat": lat_f,
-                "lon": lon_f,
-                "alt_m": float(baro_alt) if baro_alt is not None else None,
-                "velocity_mps": float(vel) if vel is not None else None,
-                "heading_deg": float(true_track) if true_track is not None else None,
-                "on_ground": bool(on_ground),
-                "squawk": squawk,
-                "observed_at": obs,
-                "ingest_type": "aircraft",
-                "source": "opensky",
-            }
-        )
+        sq = str(squawk or "").strip() or None
+        cls = _aircraft_class_from(callsign, sq)
+        phase = _flight_phase(baro_alt, bool(on_ground))
+        row: dict[str, Any] = {
+            "id": str(icao24),
+            "callsign": callsign or str(icao24),
+            "lat": lat_f,
+            "lon": lon_f,
+            "alt_m": float(baro_alt) if baro_alt is not None else None,
+            "velocity_mps": float(vel) if vel is not None else None,
+            "heading_deg": float(true_track) if true_track is not None else None,
+            "on_ground": bool(on_ground),
+            "squawk": sq,
+            "observed_at": obs,
+            "ingest_type": "aircraft",
+            "source": "opensky",
+        }
+        if cls is not None:
+            row["aircraft_class"] = cls
+        if phase is not None:
+            row["flight_phase"] = phase
+        out.append(row)
     return out
 
 
@@ -133,9 +168,13 @@ async def fetch_aircraft_states() -> list[dict[str, Any]]:
                 if not ident:
                     continue
                 flags = int(item.get("dbFlags") or 0)
-                squawk = str(item.get("squawk") or "")
-                category = "government" if flags & 1 else "emergency" if squawk in {"7500", "7600", "7700"} else "commercial" if item.get("flight") else "private"
-                out[ident] = {
+                squawk_raw = str(item.get("squawk") or "").strip() or None
+                category = "government" if flags & 1 else "emergency" if squawk_raw in _EMERGENCY_SQUAWKS else "commercial" if item.get("flight") else "private"
+                alt_baro = item.get("alt_baro")
+                on_gnd = alt_baro == "ground"
+                alt_m = float(alt_baro) * 0.3048 if isinstance(alt_baro, (int, float)) else None
+                phase = _flight_phase(alt_m, on_gnd)
+                entry: dict[str, Any] = {
                     "id": ident,
                     "callsign": str(item.get("flight") or ident).strip(),
                     "registration": item.get("r"),
@@ -143,16 +182,19 @@ async def fetch_aircraft_states() -> list[dict[str, Any]]:
                     "aircraft_class": category,
                     "lat": float(lat),
                     "lon": float(lon),
-                    "alt_m": float(item.get("alt_baro")) * 0.3048 if isinstance(item.get("alt_baro"), (int, float)) else None,
+                    "alt_m": alt_m,
                     "velocity_mps": float(item.get("gs")) * 0.514444 if item.get("gs") is not None else None,
                     "heading_deg": item.get("track"),
-                    "on_ground": item.get("alt_baro") == "ground",
-                    "squawk": squawk or None,
+                    "on_ground": on_gnd,
+                    "squawk": squawk_raw,
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                     "ingest_type": "aircraft",
                     "source": "adsb.lol",
                     "license": "ODbL-1.0",
                 }
+                if phase is not None:
+                    entry["flight_phase"] = phase
+                out[ident] = entry
         return list(out.values())[:2500]
     except Exception:
         logger.exception("aircraft fallback failed; publishing an empty aircraft layer")
