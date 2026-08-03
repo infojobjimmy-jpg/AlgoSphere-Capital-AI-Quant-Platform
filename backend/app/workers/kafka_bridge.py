@@ -33,6 +33,7 @@ async def main() -> None:
         "storms": [],
         "ships": [],
         "cameras": [],
+        "transit": [],
         "market_crypto": [],
         "market_forex": [],
         "market_equities": [],

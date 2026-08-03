@@ -19,6 +19,7 @@ from app.market.twelve_data import fetch_forex_sample
 from app.services import camera_pipeline as _cam_pipeline
 from app.services.camera_pipeline import fetch_cameras_for_telemetry
 from app.services.nhc_storms import fetch_active_storms
+from app.services.gtfs_realtime import fetch_transit_vehicles
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("acap.ingestion")
@@ -105,6 +106,17 @@ async def loop_ships(bus: KafkaBus) -> None:
     await run_ais_stream(publish)
 
 
+async def loop_transit(bus: KafkaBus) -> None:
+    while True:
+        try:
+            vehicles = await fetch_transit_vehicles()
+            await emit(bus, "transit", vehicles)
+        except Exception:
+            logger.exception("transit ingest failed")
+            await emit(bus, "transit", [])
+        await asyncio.sleep(30.0)
+
+
 async def loop_binance_ws(bus: KafkaBus) -> None:
     async def push(items: list) -> None:
         await emit(bus, "market_crypto", items)
@@ -180,6 +192,7 @@ async def main() -> None:
             loop_storms(bus),
             loop_ships(bus),
             loop_cameras(bus),
+            loop_transit(bus),
         ]
         market_tasks = [] if settings.public_geospatial_mode else [
             loop_market_crypto(bus),

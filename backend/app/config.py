@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
     navigation_osrm_base_url: str = "https://router.project-osrm.org"
     navigation_http_timeout_sec: float = 15.0
+    transit_feed_url: str | None = None
     tavily_api_key: str | None = None
     serpapi_key: str | None = None
     camera_probe_interval_sec: float = 90.0

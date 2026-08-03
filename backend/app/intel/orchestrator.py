@@ -70,6 +70,7 @@ async def build_snapshot(
     aircraft = layers.get("aircraft", [])
     wx = layers.get("weather", [])
     ships = layers.get("ships", [])
+    transit = layers.get("transit", [])
 
     events, ewma2 = detect_events(
         aircraft, ships, wx, ewma_state, settings.h3_aircraft_resolution, thresholds=th
@@ -245,6 +246,13 @@ async def build_snapshot(
             "count": len(wx),
             "provider": "open_meteo",
             "error_code": None,
+            "updated_at": _now,
+        },
+        "transit": {
+            "status": "live" if transit else "unavailable",
+            "count": len(transit),
+            "provider": "gtfs_realtime",
+            "error_code": None if transit else "NOT_CONFIGURED",
             "updated_at": _now,
         },
     }

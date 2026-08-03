@@ -98,6 +98,28 @@ function navStatusLabel(v: number | null): string {
   return NAV_STATUS_LABELS[v] ?? `Status ${v}`;
 }
 
+const TRANSIT_COLORS: Record<string, string> = {
+  bus: "#a8e6cf", rail: "#88c4ff", metro: "#c8b4ff",
+  tram: "#ffd580", ferry: "#80d8ff", cable: "#ffb3a7",
+  aerial: "#d4ff80", funicular: "#ffcca0", transit: "#b0b8c8",
+};
+function colorForTransitClass(cls: string): Cesium.Color {
+  const hex = TRANSIT_COLORS[cls] ?? "#b0b8c8";
+  return Cesium.Color.fromCssColorString(hex).withAlpha(0.92);
+}
+
+const TRANSIT_CLASS_LABELS: Record<string, { fr: string; en: string }> = {
+  bus:       { fr: "Bus",              en: "Bus" },
+  rail:      { fr: "Train / Banlieue", en: "Rail / Commuter" },
+  metro:     { fr: "Métro",            en: "Metro / Subway" },
+  tram:      { fr: "Tramway",          en: "Tram" },
+  ferry:     { fr: "Traversier",       en: "Ferry" },
+  cable:     { fr: "Téléphérique",     en: "Cable car" },
+  aerial:    { fr: "Télécabine",       en: "Aerial lift" },
+  funicular: { fr: "Funiculaire",      en: "Funicular" },
+  transit:   { fr: "Véhicule public",  en: "Transit vehicle" },
+};
+
 // ICAO Doc 8168 / Annex 2 standard squawk code meanings
 const SQUAWK_LABELS: Record<string, string> = {
   "7500": "unlawful interference",
@@ -256,6 +278,7 @@ export default function App() {
     cams: Cesium.PointPrimitiveCollection;
     gps: Cesium.PointPrimitiveCollection;
     road: Cesium.PointPrimitiveCollection;
+    transit: Cesium.PointPrimitiveCollection;
     route: Cesium.PolylineCollection;
     trails: Cesium.PolylineCollection;
     heat: Cesium.EntityCollection;
@@ -291,6 +314,8 @@ export default function App() {
   const [showStorms, setShowStorms] = useState(true);
   const [showCams, setShowCams] = useState(true);
   const [showHeat, setShowHeat] = useState(true);
+  const [showTransit, setShowTransit] = useState(true);
+  const [transitClass, setTransitClass] = useState("all");
   const [shipClass, setShipClass] = useState("all");
   const [shipCountry, setShipCountry] = useState("all");
   const [shipStatus, setShipStatus] = useState("all");
@@ -427,6 +452,7 @@ export default function App() {
       cameras: src.cameras?.count ?? (layers.cameras ?? []).length,
       weather: src.weather?.count ?? (layers.weather ?? []).length,
       storms: (layers.storms ?? []).length,
+      transit: src.transit?.count ?? (layers.transit ?? []).length,
       updated: String(snap?.meta?.updated_at ?? "—"),
     };
   }, [snap]);
@@ -441,6 +467,7 @@ export default function App() {
       [isUnavailable("ships", counts.ships), lang === "fr" ? "navires" : "vessels"],
       [isUnavailable("weather", counts.weather), lang === "fr" ? "météo" : "weather"],
       [isUnavailable("cameras", counts.cameras), lang === "fr" ? "caméras" : "cameras"],
+      [isUnavailable("transit", counts.transit), lang === "fr" ? "transit" : "transit"],
     ].filter(([unavail]) => Boolean(unavail)).map(([, label]) => String(label));
   }, [counts, lang, snap]);
 
@@ -490,10 +517,11 @@ export default function App() {
     const cams = primitives.add(new Cesium.PointPrimitiveCollection());
     const gps = primitives.add(new Cesium.PointPrimitiveCollection());
     const road = primitives.add(new Cesium.PointPrimitiveCollection());
+    const transit = primitives.add(new Cesium.PointPrimitiveCollection());
     const route = primitives.add(new Cesium.PolylineCollection());
     const trails = primitives.add(new Cesium.PolylineCollection());
 
-    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, road, route, trails, heat: viewer.entities };
+    layersRef.current = { aircraft, ships, sats, wx, storms, cams, gps, road, transit, route, trails, heat: viewer.entities };
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-15, 25, 18_000_000),
@@ -706,6 +734,7 @@ export default function App() {
     L.wx.removeAll();
     L.storms.removeAll();
     L.cams.removeAll();
+    L.transit.removeAll();
     L.trails.removeAll();
     L.heat.removeAll();
 
@@ -887,6 +916,23 @@ export default function App() {
       }
     }
 
+    if (showTransit) {
+      for (const v of layers.transit ?? []) {
+        if (transitClass !== "all" && String(v.vehicle_class ?? "transit") !== transitClass) continue;
+        const lat = Number(v.lat);
+        const lon = Number(v.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        L.transit.add({
+          id: { kind: "transit", data: v },
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 50),
+          color: colorForTransitClass(String(v.vehicle_class ?? "transit")),
+          pixelSize: 5,
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
+          outlineWidth: 1,
+        });
+      }
+    }
+
     if (showHeat) {
       const acHeat = snap.heatmaps?.aircraft ?? [];
       for (const h of acHeat) {
@@ -909,7 +955,7 @@ export default function App() {
     }
 
     viewer.scene.requestRender();
-  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, aircraftClass, aircraftPhase, shipClass, shipCountry, shipStatus, satCountry, satFunction, satOrbit]);
+  }, [snap, showAircraft, showSats, showShips, showWeather, showStorms, showCams, showHeat, showTransit, aircraftClass, aircraftPhase, shipClass, shipCountry, shipStatus, satCountry, satFunction, satOrbit, transitClass]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1564,6 +1610,11 @@ export default function App() {
               <SourceBadge src={snap?.sources?.cameras} lang={lang} />
             </div>
             <div className="stat">
+              <label>{lang === "fr" ? "Transit" : "Transit"}</label>
+              <strong>{availabilityCount(counts.transit, lang)}</strong>
+              <SourceBadge src={snap?.sources?.transit} lang={lang} />
+            </div>
+            <div className="stat">
               <label>{lang === "fr" ? "Mise à jour" : "Updated"}</label>
               <strong style={{ fontSize: 12, color: "var(--muted)" }}>{counts.updated}</strong>
             </div>
@@ -1600,12 +1651,16 @@ export default function App() {
                 <input type="checkbox" checked={showHeat} onChange={(e) => setShowHeat(e.target.checked)} />
                 {lang === "fr" ? "Zones d’activité" : "Activity zones"}
               </label>
+              <label className="toggle">
+                <input type="checkbox" checked={showTransit} onChange={(e) => setShowTransit(e.target.checked)} />
+                {lang === "fr" ? "Véhicules de transit" : "Transit vehicles"}
+              </label>
             </div>
             <details className="adv-filters">
               <summary className="adv-filters-summary">
                 {lang === "fr" ? "Filtres avancés" : "Advanced filters"}
-                {[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit].some((v) => v !== "all") ? (
-                  <span className="adv-filters-badge">{[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit].filter((v) => v !== "all").length}</span>
+                {[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit, transitClass].some((v) => v !== "all") ? (
+                  <span className="adv-filters-badge">{[shipClass, shipCountry, shipStatus, aircraftClass, aircraftPhase, satCountry, satFunction, satOrbit, transitClass].filter((v) => v !== "all").length}</span>
                 ) : null}
               </summary>
               <div className={`layer-filters ${authConfigured && !member ? "layer-filters--locked" : ""}`} onClick={() => { if (authConfigured && !member) setShowSubscriptions(true); }}>
@@ -1637,10 +1692,8 @@ export default function App() {
                 </select></label>
                 <label>{lang === "fr" ? "Avions · type" : "Aircraft · type"}<select value={aircraftClass} disabled={authConfigured && !member} onChange={(e) => setAircraftClass(e.target.value)}>
                   <option value="all">{lang === "fr" ? "Tous les types" : "All types"}</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="cargo">Cargo</option>
-                  <option value="private">{lang === "fr" ? "Privé / VFR" : "Private / VFR"}</option>
                   <option value="emergency">{lang === "fr" ? "Urgence (7500–7700)" : "Emergency (7500–7700)"}</option>
+                  <option value="general_aviation">{lang === "fr" ? "Aviation générale (VFR)" : "General aviation (VFR)"}</option>
                   <option value="government">{lang === "fr" ? "Gouvernemental / Militaire" : "Government / Military"}</option>
                   <option value="other">{lang === "fr" ? "Non classifié" : "Unclassified"}</option>
                 </select></label>
@@ -1650,6 +1703,14 @@ export default function App() {
                   <option value="low">{lang === "fr" ? "Basse altitude (< 3 000 m)" : "Low altitude (< 3 000 m)"}</option>
                   <option value="medium">{lang === "fr" ? "Altitude moyenne (3 000–7 500 m)" : "Mid altitude (3 000–7 500 m)"}</option>
                   <option value="high">{lang === "fr" ? "Haute altitude (> 7 500 m)" : "High altitude (> 7 500 m)"}</option>
+                </select></label>
+                <label>{lang === "fr" ? "Transit · type de véhicule" : "Transit · vehicle type"}<select value={transitClass} disabled={authConfigured && !member} onChange={(e) => setTransitClass(e.target.value)}>
+                  <option value="all">{lang === "fr" ? "Tous" : "All"}</option>
+                  <option value="bus">Bus</option>
+                  <option value="rail">{lang === "fr" ? "Train / Banlieue" : "Rail / Commuter"}</option>
+                  <option value="metro">{lang === "fr" ? "Métro" : "Metro / Subway"}</option>
+                  <option value="tram">Tram</option>
+                  <option value="ferry">{lang === "fr" ? "Traversier" : "Ferry"}</option>
                 </select></label>
                 <label>{lang === "fr" ? "Satellite · pays" : "Satellite · country"}<input disabled={authConfigured && !member} value={satCountry === "all" ? "" : satCountry} placeholder={lang === "fr" ? "Tous" : "All"} onChange={(e) => setSatCountry(e.target.value.trim() || "all")} /></label>
                 <label>{lang === "fr" ? "Fonction" : "Function"}<input disabled={authConfigured && !member} value={satFunction === "all" ? "" : satFunction} placeholder={lang === "fr" ? "Toutes" : "All"} onChange={(e) => setSatFunction(e.target.value.trim() || "all")} /></label>
@@ -2187,6 +2248,9 @@ export default function App() {
                     display = p ? (lang === "fr" ? p.fr : p.en) : String(value);
                   } else if (key === "flight_phase" && selectedFeature.kind === "aircraft") {
                     const p = FLIGHT_PHASE_LABELS[String(value)];
+                    display = p ? (lang === "fr" ? p.fr : p.en) : String(value);
+                  } else if (key === "vehicle_class" && selectedFeature.kind === "transit") {
+                    const p = TRANSIT_CLASS_LABELS[String(value)];
                     display = p ? (lang === "fr" ? p.fr : p.en) : String(value);
                   } else {
                     display = String(value);

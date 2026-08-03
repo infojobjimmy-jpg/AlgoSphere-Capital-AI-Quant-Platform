@@ -14,7 +14,7 @@ def public_preview(payload: dict) -> dict:
     preview_layers = {
         name: list(rows or [])[:12]
         for name, rows in layers.items()
-        if name in {"aircraft", "ships", "satellites", "weather", "storms", "cameras"}
+        if name in {"aircraft", "ships", "satellites", "weather", "storms", "cameras", "transit"}
     }
     meta = dict(payload.get("meta") or {})
     meta["access"] = "preview"
