@@ -4,6 +4,17 @@ import cesium from "vite-plugin-cesium";
 
 export default defineConfig({
   plugins: [react(), cesium()],
+  build: {
+    target: "es2020",
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {
