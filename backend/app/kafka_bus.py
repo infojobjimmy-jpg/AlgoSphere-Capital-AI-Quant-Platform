@@ -100,7 +100,7 @@ async def wait_for_kafka(*, max_attempts: int | None = None) -> None:
                 except Exception:
                     pass
                 if max_attempts is not None:
-                    logger.info("Kafka is ready, starting trading agent")
+                    logger.info("Kafka is ready")
                 logger.info(
                     "Kafka ready (TCP %s:%s); bootstrap=%s after %d wait attempt(s)",
                     host,
