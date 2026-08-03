@@ -12,8 +12,6 @@ from app.cortex.cycle import run_kafka_intel_tick
 from app.meta_learning.evolution_agent import schedule_evolution_tick
 from app.db.session import ensure_database
 from app.kafka_bus import make_consumer, wait_for_kafka
-from app.market_hub_bus import BUMP_CHANNEL
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("acap.bridge")
 
@@ -75,10 +73,6 @@ async def main() -> None:
 
             raw = json.dumps(snap, separators=(",", ":"))
             await r.set(settings.redis_snapshot_key(), raw)
-            try:
-                await r.publish(BUMP_CHANNEL, "snapshot")
-            except Exception:
-                logger.debug("market_hub bump publish failed", exc_info=True)
             await r.lpush(settings.redis_timeline_key(), raw)
             await r.ltrim(settings.redis_timeline_key(), 0, 299)
             await r.set(settings.redis_hist_aircraft_key(), json.dumps(list(ac_hist)))

@@ -22,7 +22,6 @@ from app.intel.orchestrator import build_snapshot
 from app.learning.adaptive_thresholds import load_thresholds
 from app.learning.performance import record_cycle
 from app.meta_learning.cortex_recorder import record_strategy_memory_tick
-from app.trading.hook import on_cortex_tick
 from app.meta_learning.guidance import (
     compact_guidance_payload,
     load_guidance,
@@ -138,14 +137,6 @@ async def run_kafka_intel_tick(
     t3 = datetime.now(timezone.utc)
     await remember_episode(snap)
     phases.append({"name": "memory", "ms": _ms_since(t3)})
-
-    if not settings.public_geospatial_mode:
-        t4 = datetime.now(timezone.utc)
-        try:
-            await on_cortex_tick(r, snap)
-        except Exception:
-            logger.exception("cortex: trading hook failed")
-        phases.append({"name": "trading", "ms": _ms_since(t4)})
 
     _attach_cortex_meta(snap, phases=phases)
 
