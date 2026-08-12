@@ -18,6 +18,7 @@ type NewsGuardState = {
   status?: "ON" | "OFF" | string;
   risk?: string;
   active_events?: NewsEvent[];
+  upcoming_events?: NewsEvent[];
   next_event?: NewsEvent | null;
   checked_at?: string;
   fail_safe?: boolean;
@@ -57,6 +58,21 @@ function eventTargets(event?: NewsEvent | null): string {
   return values.length ? values.join(", ") : "global";
 }
 
+function riskIcon(risk?: string): string {
+  switch ((risk ?? "").toUpperCase()) {
+    case "CRITICAL":
+      return "🔴";
+    case "HIGH":
+      return "🟠";
+    case "MODERATE":
+      return "🟡";
+    case "LOW":
+      return "🟢";
+    default:
+      return "⚪";
+  }
+}
+
 export default function NewsGuardPanel() {
   const [state, setState] = useState<NewsGuardState | null>(null);
   const [error, setError] = useState<string>("");
@@ -91,6 +107,7 @@ export default function NewsGuardPanel() {
 
   const next = state?.next_event ?? null;
   const active = state?.active_events ?? [];
+  const upcoming = state?.upcoming_events ?? (next ? [next] : []);
   const status = state?.status ?? (error ? "OFF" : "—");
   const risk = state?.risk ?? (error ? "CRITICAL" : "—");
   const headline = useMemo(() => {
@@ -107,7 +124,7 @@ export default function NewsGuardPanel() {
       </div>
       <div className="tl-stat">
         <label>Risque</label>
-        <strong>{risk}</strong>
+        <strong>{riskIcon(risk)} {risk}</strong>
       </div>
       <div className="tl-muted tl-small">{headline}</div>
 
@@ -115,7 +132,7 @@ export default function NewsGuardPanel() {
         <div className="tl-scroll" style={{ maxHeight: 130, marginTop: 10 }}>
           {active.map((event, index) => (
             <div key={event.id ?? `${event.title}-${index}`} className="tl-row tl-mono tl-small">
-              {event.title ?? "Événement"} · {eventTargets(event)} · {formatMontreal(event.at)} Québec
+              {riskIcon(event.risk)} {event.title ?? "Événement"} · {eventTargets(event)} · {formatMontreal(event.at)} Québec
             </div>
           ))}
         </div>
@@ -142,6 +159,23 @@ export default function NewsGuardPanel() {
           Fenêtre OFF: -{next.off_before_min ?? 0} min / +{next.off_after_min ?? 0} min
         </div>
       ) : null}
+
+      {upcoming.length > 1 ? (
+        <div style={{ marginTop: 12 }}>
+          <div className="tl-muted tl-small">Prochains événements</div>
+          <div className="tl-scroll" style={{ maxHeight: 155, marginTop: 6 }}>
+            {upcoming.slice(0, 4).map((event, index) => (
+              <div key={event.id ?? `${event.title}-upcoming-${index}`} className="tl-row tl-small">
+                <span>{riskIcon(event.risk)}</span>{" "}
+                <span className="tl-mono">{formatMontreal(event.at)}</span>{" · "}
+                <span>{event.title ?? "Événement"}</span>{" · "}
+                <span className="tl-muted">{eventTargets(event)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {state?.fail_safe ? <div className="tl-muted tl-small">Fail-safe actif</div> : null}
       {error || state?.reason ? <div className="tl-err">{error || state?.reason}</div> : null}
     </DraggableCard>
