@@ -1,0 +1,148 @@
+{
+  "name": "AlgoSphere News Guard",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "minutes", "minutesInterval": 5}]}
+      },
+      "id": "refresh-trigger",
+      "name": "Refresh Calendar Every 5m",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-620, -260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ALGOSPHERE_API_BASE + '/news-guard/refresh'}}",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "x-admin-key", "value": "={{$env.ALGOSPHERE_API_ADMIN_KEY}}"}]},
+        "options": {}
+      },
+      "id": "refresh-api",
+      "name": "Refresh News Guard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-360, -260]
+    },
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "cronExpression", "expression": "0 7 * * *"}]}
+      },
+      "id": "morning-trigger",
+      "name": "Brief 07h Quebec",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-620, -40]
+    },
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "cronExpression", "expression": "0 17 * * *"}]}
+      },
+      "id": "evening-trigger",
+      "name": "Brief 17h Quebec",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-620, 140]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ALGOSPHERE_API_BASE + '/news-guard/status'}}",
+        "options": {}
+      },
+      "id": "brief-status",
+      "name": "Read News Guard Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-320, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$json; const n=s.next_event; const lines=['### AlgoSphere News Guard',`État: ${s.status} | Risque: ${s.risk}`]; if(n){lines.push(`Prochaine nouvelle: ${n.title}`); lines.push(`Heure: ${n.at}`); lines.push(`Touchés: ${(n.symbols?.length?n.symbols:n.currencies||[]).join(', ')||'global'}`); lines.push(`Fenêtre OFF: -${n.off_before_min||0} / +${n.off_after_min||0} min`);} else {lines.push('Aucune nouvelle prochaine enregistrée.');} return [{json:{content:lines.join('\\n')}}];"
+      },
+      "id": "brief-format",
+      "name": "Format Daily Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({content:$json.content})}}",
+        "options": {}
+      },
+      "id": "brief-discord",
+      "name": "Discord Daily Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 60]
+    },
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "minutes", "minutesInterval": 1}]}
+      },
+      "id": "tminus-trigger",
+      "name": "T-10 Watch Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-620, 360]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ALGOSPHERE_API_BASE + '/news-guard/status'}}",
+        "options": {}
+      },
+      "id": "tminus-status",
+      "name": "Read Next Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-360, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "const n=$json.next_event; if(!n) return []; const mins=(new Date(n.at).getTime()-Date.now())/60000; const severe=['HIGH','CRITICAL'].includes(String(n.risk||'').toUpperCase()); if(!severe || mins<9 || mins>10.2) return []; const targets=(n.symbols?.length?n.symbols:n.currencies||[]).join(', ')||'global'; return [{json:{content:`⚠️ **AlgoSphere News Guard — T-10 min**\\n${n.title}\\nRisque: ${n.risk}\\nTouchés: ${targets}\\nEA: prudence / nouvelles entrées bloquées selon la fenêtre configurée.`}}];"
+      },
+      "id": "tminus-filter",
+      "name": "Select T-10 High Impact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({content:$json.content})}}",
+        "options": {}
+      },
+      "id": "tminus-discord",
+      "name": "Discord T-10 Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 360]
+    }
+  ],
+  "connections": {
+    "Refresh Calendar Every 5m": {"main": [[{"node": "Refresh News Guard", "type": "main", "index": 0}]]},
+    "Brief 07h Quebec": {"main": [[{"node": "Read News Guard Status", "type": "main", "index": 0}]]},
+    "Brief 17h Quebec": {"main": [[{"node": "Read News Guard Status", "type": "main", "index": 0}]]},
+    "Read News Guard Status": {"main": [[{"node": "Format Daily Brief", "type": "main", "index": 0}]]},
+    "Format Daily Brief": {"main": [[{"node": "Discord Daily Brief", "type": "main", "index": 0}]]},
+    "T-10 Watch Every Minute": {"main": [[{"node": "Read Next Event", "type": "main", "index": 0}]]},
+    "Read Next Event": {"main": [[{"node": "Select T-10 High Impact", "type": "main", "index": 0}]]},
+    "Select T-10 High Impact": {"main": [[{"node": "Discord T-10 Alert", "type": "main", "index": 0}]]}
+  },
+  "settings": {"timezone": "America/Montreal", "executionOrder": "v1"},
+  "active": false,
+  "versionId": "algosphere-news-guard-v1",
+  "meta": {"templateCredsSetupCompleted": false},
+  "tags": []
+}
