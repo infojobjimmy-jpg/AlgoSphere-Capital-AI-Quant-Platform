@@ -8,6 +8,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.economic_calendar import fetch_calendar
 from app.services.news_guard import read_state, save_events
 
 router = APIRouter()
@@ -46,6 +47,26 @@ async def replace_events(body: EventBatch):
         events = await save_events(client, [event.model_dump(exclude_none=True) for event in body.events])
         state = await read_state(client)
         return {"count": len(events), "state": state}
+    finally:
+        await client.aclose()
+
+
+@router.post("/refresh")
+async def refresh_calendar():
+    try:
+        fetched = await fetch_calendar()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"economic_calendar_refresh_failed: {exc}") from exc
+
+    client = redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        events = await save_events(client, fetched)
+        state = await read_state(client)
+        return {
+            "provider": settings.news_guard_calendar_provider,
+            "count": len(events),
+            "state": state,
+        }
     finally:
         await client.aclose()
 
