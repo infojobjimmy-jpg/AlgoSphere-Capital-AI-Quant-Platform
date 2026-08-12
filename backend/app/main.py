@@ -13,7 +13,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
 from app.db.session import ensure_database
-from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, social, webhooks
+from app.routers import account, alerts, analytics, auth, cameras, decisions, discovery, goals, health, layers, metrics as metrics_router, news_guard, social, webhooks
 from app.routers.analytics import ensure_visitor_sessions_table
 from app.services.whop_auth import configured as auth_configured, is_membership_revoked, read_session
 from app.services.whop_fulfillment import (
@@ -126,6 +126,7 @@ app.include_router(navigation.router, prefix="/navigation", tags=["navigation"])
 app.include_router(system.router, prefix="/system", tags=["system"])
 app.include_router(layers.router, prefix="/layers", tags=["layers"])
 app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+app.include_router(news_guard.router, prefix="/news-guard", tags=["news-guard"])
 app.include_router(discovery.router, prefix="/discovery", tags=["discovery"])
 app.include_router(cameras.router, prefix="/cameras", tags=["cameras"])
 app.include_router(decisions.router, prefix="/decisions", tags=["decisions"])
@@ -163,7 +164,7 @@ async def websocket_live(ws: WebSocket) -> None:
                 if await is_membership_revoked(_rc, membership_id):
                     member = None
             except Exception:
-                member = None  # fail-safe: no silent access when Redis unavailable
+                member = None
             finally:
                 await _rc.aclose()
     preview_only = auth_configured() and member is None
@@ -192,12 +193,8 @@ async def websocket_live(ws: WebSocket) -> None:
                 continue
             if data.get("type") == "hello":
                 manager.set_compress(ws, bool(data.get("compress", True)))
-                # Do not send a JSON acknowledgement: the frontend stream accepts
-                # only snapshot payloads and must never be overwritten by control frames.
                 continue
             if data.get("type") == "ping":
-                # Receiving the ping is enough to keep the application-level stream
-                # active. A JSON pong would be mistaken for a snapshot by older clients.
                 continue
     except WebSocketDisconnect:
         if not preview_only:
