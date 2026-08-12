@@ -81,6 +81,7 @@ async def notify(
     client = redis.from_url(settings.redis_url, decode_responses=True)
     try:
         state = await read_state(client)
+        event_id: str | None = None
         if kind == "brief":
             message = format_brief(state)
         else:
@@ -90,14 +91,17 @@ async def notify(
             if mins is None or risk not in {"HIGH", "CRITICAL"} or not (8.5 <= mins <= 10.5):
                 return {"sent": False, "reason": "no_tminus_event", "minutes": mins, "risk": risk}
             event_id = str(event.get("id") or event.get("at") or "event")
-            dedupe_key = f"{settings.app_slug}:news_guard:tminus_sent:{event_id}"
-            claimed = await client.set(dedupe_key, "1", ex=7200, nx=True)
-            if not claimed:
-                return {"sent": False, "reason": "duplicate", "event_id": event_id}
             message = format_tminus(state)
 
         if dry_run:
             return {"sent": False, "dry_run": True, "kind": kind, "message": message, "state": state}
+
+        if kind == "tminus" and event_id:
+            dedupe_key = f"{settings.app_slug}:news_guard:tminus_sent:{event_id}"
+            claimed = await client.set(dedupe_key, "1", ex=7200, nx=True)
+            if not claimed:
+                return {"sent": False, "reason": "duplicate", "event_id": event_id}
+
         result = await dispatch(message, sms=sms)
         return {"sent": True, "kind": kind, "channels": result, "message": message}
     finally:
