@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     news_guard_fail_safe: bool = True
     news_guard_block_at_risk: str = "HIGH"
     news_guard_timezone: str = "America/Montreal"
+    news_guard_calendar_provider: str = "finnhub"
+    news_guard_calendar_days: int = 3
+    news_guard_http_timeout_sec: float = 15.0
 
     self_code_enabled: bool = False
     self_code_dry_run: bool = True
