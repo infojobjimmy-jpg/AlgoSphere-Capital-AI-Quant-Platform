@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: python -m compileall -q app
-      - run: pytest -q tests/test_news_guard.py tests/test_news_guard_fail_safe.py tests/test_news_guard_router.py tests/test_news_guard_execution.py
+      - run: pytest -q tests/test_news_guard.py tests/test_news_guard_fail_safe.py tests/test_news_guard_router.py tests/test_news_guard_execution.py tests/test_news_guard_notify.py
 
   frontend:
     runs-on: ubuntu-latest
