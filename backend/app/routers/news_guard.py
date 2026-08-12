@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -50,7 +51,16 @@ async def replace_events(body: EventBatch):
 
 
 @router.get("/mt5")
-async def mt5_guard(symbol: str | None = Query(default=None)):
+async def mt5_guard(
+    symbol: str | None = Query(default=None),
+    x_mt5_token: str = Header(default="", alias="x-mt5-token"),
+):
+    expected = settings.mt5_api_token or ""
+    if not expected:
+        raise HTTPException(status_code=503, detail="MT5_API_TOKEN is required")
+    if not secrets.compare_digest(x_mt5_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     client = redis.from_url(settings.redis_url, decode_responses=True)
     try:
         state = await read_state(client, symbol=symbol)
