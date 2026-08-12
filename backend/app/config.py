@@ -26,7 +26,6 @@ class Settings(BaseSettings):
     whop_api_key: str | None = None
     whop_allowed_product_ids: str = "prod_bHg2Q9qH34ABM,prod_tGJzw7gVSEPgi,prod_uqA3jSjF5t3fy"
     whop_webhook_secret: str | None = None
-    # Set after confirming product IDs in Whop dashboard — empty means all valid members get explorer access
     whop_plan_explorer_ids: str = ""
     whop_plan_pro_ids: str = ""
     whop_plan_business_ids: str = ""
@@ -86,14 +85,20 @@ class Settings(BaseSettings):
     trading_emergency_stop_dd_pct: float = 25.0
     trading_kill_switch: bool = False
     paper_capital_usd: float = 100_000.0
-    trading_mode: str = "paper"  # paper | live
-    trading_live_broker: str = "mt5"  # mt5 | ctrader
+    trading_mode: str = "paper"
+    trading_live_broker: str = "mt5"
     mt5_bridge_url: str | None = None
     mt5_api_token: str | None = None
     ctrader_base_url: str | None = None
     ctrader_access_token: str | None = None
     ctrader_account_id: str | None = None
-    trading_admin_api_key: str | None = None  # set TRADING_ADMIN_API_KEY in env; kill-switch/mode require it
+    trading_admin_api_key: str | None = None
+
+    news_guard_enabled: bool = True
+    news_guard_fail_safe: bool = True
+    news_guard_block_at_risk: str = "HIGH"
+    news_guard_timezone: str = "America/Montreal"
+
     self_code_enabled: bool = False
     self_code_dry_run: bool = True
     self_code_workspace_root: str = "/app"
@@ -145,6 +150,12 @@ class Settings(BaseSettings):
 
     def redis_live_account_key(self) -> str:
         return f"{self.app_slug}:live:account"
+
+    def redis_news_guard_events_key(self) -> str:
+        return f"{self.app_slug}:news_guard:events"
+
+    def redis_news_guard_state_key(self) -> str:
+        return f"{self.app_slug}:news_guard:state"
 
 
 settings = Settings()
