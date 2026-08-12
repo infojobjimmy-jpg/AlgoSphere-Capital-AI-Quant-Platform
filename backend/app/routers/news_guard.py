@@ -79,6 +79,7 @@ async def notify(
     dry_run: bool = Query(default=False),
 ):
     client = redis.from_url(settings.redis_url, decode_responses=True)
+    dedupe_key: str | None = None
     try:
         state = await read_state(client)
         event_id: str | None = None
@@ -102,8 +103,23 @@ async def notify(
             if not claimed:
                 return {"sent": False, "reason": "duplicate", "event_id": event_id}
 
-        result = await dispatch(message, sms=sms)
-        return {"sent": True, "kind": kind, "channels": result, "message": message}
+        try:
+            result = await dispatch(message, sms=sms)
+        except Exception:
+            if dedupe_key:
+                await client.delete(dedupe_key)
+            raise
+
+        delivered = any(bool(channel.get("sent")) for channel in result.values() if isinstance(channel, dict))
+        if not delivered and dedupe_key:
+            await client.delete(dedupe_key)
+        return {
+            "sent": delivered,
+            "kind": kind,
+            "channels": result,
+            "message": message,
+            "reason": None if delivered else "no_notification_channel_delivered",
+        }
     finally:
         await client.aclose()
 
