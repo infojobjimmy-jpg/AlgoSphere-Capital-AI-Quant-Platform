@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import secrets
 from typing import Any
 
@@ -39,6 +41,57 @@ async def status(symbol: str | None = Query(default=None)):
         return await read_state(client, symbol=symbol)
     finally:
         await client.aclose()
+
+
+@router.get("/health")
+async def health():
+    client = redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        state = await read_state(client)
+        raw_events = await client.get(settings.redis_news_guard_events_key())
+        try:
+            event_count = len(json.loads(raw_events)) if raw_events else 0
+        except Exception:
+            event_count = 0
+        last_refresh = await client.get(f"{settings.app_slug}:news_guard:last_refresh")
+    finally:
+        await client.aclose()
+
+    provider = settings.news_guard_calendar_provider.strip().lower()
+    calendar_source_configured = bool(settings.finnhub_api_key) if provider == "finnhub" else False
+    discord_configured = bool(os.getenv("NEWS_GUARD_DISCORD_WEBHOOK_URL", "").strip())
+    sms_configured = all(
+        os.getenv(name, "").strip()
+        for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "NEWS_GUARD_SMS_TO")
+    )
+    reason = state.get("reason")
+    guard_ready = bool(settings.news_guard_enabled) and reason not in {
+        "news_guard_calendar_not_initialized",
+        "news_guard_calendar_stale",
+        "news_guard_unavailable",
+    }
+    return {
+        "ready": guard_ready,
+        "enabled": bool(settings.news_guard_enabled),
+        "status": state.get("status"),
+        "risk": state.get("risk"),
+        "reason": reason,
+        "calendar": {
+            "provider": provider,
+            "source_configured": calendar_source_configured,
+            "last_refresh": last_refresh,
+            "event_count": event_count,
+            "max_stale_sec": max(60, int(os.getenv("NEWS_GUARD_MAX_STALE_SEC", "900"))),
+        },
+        "notifications": {
+            "discord_configured": discord_configured,
+            "sms_configured": sms_configured,
+        },
+        "mt5": {
+            "token_configured": bool(settings.mt5_api_token),
+            "bridge_url_configured": bool(settings.mt5_bridge_url),
+        },
+    }
 
 
 @router.post("/events")
