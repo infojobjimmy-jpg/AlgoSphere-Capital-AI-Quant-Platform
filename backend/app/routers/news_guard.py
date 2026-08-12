@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.services.economic_calendar import fetch_calendar
 from app.services.news_guard import read_state, save_events
+from app.services.news_guard_notify import dispatch, format_brief, format_tminus, minutes_until
 
 router = APIRouter()
 
@@ -67,6 +68,38 @@ async def refresh_calendar():
             "count": len(events),
             "state": state,
         }
+    finally:
+        await client.aclose()
+
+
+@router.post("/notify")
+async def notify(
+    kind: str = Query(default="brief", pattern="^(brief|tminus)$"),
+    sms: bool = Query(default=False),
+    dry_run: bool = Query(default=False),
+):
+    client = redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        state = await read_state(client)
+        if kind == "brief":
+            message = format_brief(state)
+        else:
+            event = state.get("next_event") or {}
+            mins = minutes_until(event.get("at"))
+            risk = str(event.get("risk") or "").upper()
+            if mins is None or risk not in {"HIGH", "CRITICAL"} or not (8.5 <= mins <= 10.5):
+                return {"sent": False, "reason": "no_tminus_event", "minutes": mins, "risk": risk}
+            event_id = str(event.get("id") or event.get("at") or "event")
+            dedupe_key = f"{settings.app_slug}:news_guard:tminus_sent:{event_id}"
+            claimed = await client.set(dedupe_key, "1", ex=7200, nx=True)
+            if not claimed:
+                return {"sent": False, "reason": "duplicate", "event_id": event_id}
+            message = format_tminus(state)
+
+        if dry_run:
+            return {"sent": False, "dry_run": True, "kind": kind, "message": message, "state": state}
+        result = await dispatch(message, sms=sms)
+        return {"sent": True, "kind": kind, "channels": result, "message": message}
     finally:
         await client.aclose()
 
