@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     news_guard_calendar_provider: str = "finnhub"
     news_guard_calendar_days: int = 3
     news_guard_http_timeout_sec: float = 15.0
+    news_guard_max_stale_sec: int = 900
+    news_guard_discord_webhook_url: str | None = None
+    news_guard_sms_to: str | None = None
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_from_number: str | None = None
 
     self_code_enabled: bool = False
     self_code_dry_run: bool = True
