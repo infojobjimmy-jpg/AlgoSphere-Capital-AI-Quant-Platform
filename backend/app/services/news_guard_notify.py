@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -52,7 +51,7 @@ def format_tminus(state: dict[str, Any]) -> str:
 
 
 async def send_discord(message: str) -> dict[str, Any]:
-    url = os.getenv("NEWS_GUARD_DISCORD_WEBHOOK_URL", "").strip()
+    url = (settings.news_guard_discord_webhook_url or "").strip()
     if not url:
         return {"configured": False, "sent": False}
     async with httpx.AsyncClient(timeout=settings.news_guard_http_timeout_sec) as client:
@@ -62,10 +61,10 @@ async def send_discord(message: str) -> dict[str, Any]:
 
 
 async def send_sms(message: str) -> dict[str, Any]:
-    sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-    token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-    from_number = os.getenv("TWILIO_FROM_NUMBER", "").strip()
-    to_number = os.getenv("NEWS_GUARD_SMS_TO", "").strip()
+    sid = (settings.twilio_account_sid or "").strip()
+    token = (settings.twilio_auth_token or "").strip()
+    from_number = (settings.twilio_from_number or "").strip()
+    to_number = (settings.news_guard_sms_to or "").strip()
     if not all((sid, token, from_number, to_number)):
         return {"configured": False, "sent": False}
 
@@ -78,10 +77,22 @@ async def send_sms(message: str) -> dict[str, Any]:
     return {"configured": True, "sent": True, "sid": payload.get("sid")}
 
 
+async def _safe_channel(name: str, sender, message: str) -> dict[str, Any]:
+    try:
+        return await sender(message)
+    except Exception as exc:
+        return {
+            "configured": True,
+            "sent": False,
+            "error": type(exc).__name__,
+            "channel": name,
+        }
+
+
 async def dispatch(message: str, *, sms: bool = False) -> dict[str, Any]:
-    result = {"discord": await send_discord(message)}
+    result = {"discord": await _safe_channel("discord", send_discord, message)}
     if sms:
-        result["sms"] = await send_sms(message)
+        result["sms"] = await _safe_channel("sms", send_sms, message)
     return result
 
 
