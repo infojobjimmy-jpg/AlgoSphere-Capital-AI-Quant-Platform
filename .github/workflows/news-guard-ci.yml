@@ -9,6 +9,8 @@ on:
       - "backend/**"
       - "frontend/**"
       - "infra/n8n/algosphere-news-guard.json"
+      - "infra/scripts/news-guard-preflight.ps1"
+      - "infra/scripts/deploy-news-guard.ps1"
       - ".github/workflows/news-guard-ci.yml"
 
 jobs:
@@ -53,3 +55,24 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m json.tool infra/n8n/algosphere-news-guard.json > /dev/null
+
+  powershell-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse News Guard PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "infra/scripts/news-guard-preflight.ps1",
+            "infra/scripts/deploy-news-guard.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
+          }
