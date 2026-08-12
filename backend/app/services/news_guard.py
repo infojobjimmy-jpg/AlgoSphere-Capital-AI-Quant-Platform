@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -47,6 +48,24 @@ def _symbols(event: dict[str, Any]) -> list[str]:
     if isinstance(values, str):
         values = [x.strip() for x in values.split(",")]
     return sorted({str(x).strip().upper() for x in values if str(x).strip()})
+
+
+def _last_refresh_key() -> str:
+    return f"{settings.app_slug}:news_guard:last_refresh"
+
+
+def _fail_safe_state(symbol: str | None, reason: str) -> dict[str, Any]:
+    return {
+        "enabled": True,
+        "symbol": symbol.upper() if symbol else None,
+        "status": "OFF",
+        "risk": "CRITICAL",
+        "active_events": [],
+        "next_event": None,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "fail_safe": True,
+        "reason": reason,
+    }
 
 
 def normalize_event(event: dict[str, Any]) -> dict[str, Any]:
@@ -134,7 +153,9 @@ async def load_events(r: Any) -> list[dict[str, Any]]:
 async def save_events(r: Any, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized = [normalize_event(e) for e in events]
     normalized.sort(key=lambda e: e["at"])
+    now = datetime.now(timezone.utc).isoformat()
     await r.set(settings.redis_news_guard_events_key(), json.dumps(normalized, separators=(",", ":")))
+    await r.set(_last_refresh_key(), now)
     return normalized
 
 
@@ -142,21 +163,26 @@ async def read_state(r: Any, *, symbol: str | None = None) -> dict[str, Any]:
     if not settings.news_guard_enabled:
         return evaluate([], symbol=symbol)
     try:
+        max_stale_sec = max(60, int(os.getenv("NEWS_GUARD_MAX_STALE_SEC", "900")))
+        last_refresh_raw = await r.get(_last_refresh_key())
+        if not last_refresh_raw:
+            if settings.news_guard_fail_safe:
+                return _fail_safe_state(symbol, "news_guard_calendar_not_initialized")
+        else:
+            last_refresh = _parse_dt(last_refresh_raw)
+            age_sec = (datetime.now(timezone.utc) - last_refresh).total_seconds()
+            if age_sec > max_stale_sec and settings.news_guard_fail_safe:
+                state = _fail_safe_state(symbol, "news_guard_calendar_stale")
+                state["calendar_age_sec"] = round(age_sec, 1)
+                return state
+
         events = await load_events(r)
         state = evaluate(events, symbol=symbol)
+        if last_refresh_raw:
+            state["calendar_last_refresh"] = last_refresh_raw
         await r.set(settings.redis_news_guard_state_key(), json.dumps(state, separators=(",", ":")))
         return state
     except Exception:
         if settings.news_guard_fail_safe:
-            return {
-                "enabled": True,
-                "symbol": symbol.upper() if symbol else None,
-                "status": "OFF",
-                "risk": "CRITICAL",
-                "active_events": [],
-                "next_event": None,
-                "checked_at": datetime.now(timezone.utc).isoformat(),
-                "fail_safe": True,
-                "reason": "news_guard_unavailable",
-            }
+            return _fail_safe_state(symbol, "news_guard_unavailable")
         raise
