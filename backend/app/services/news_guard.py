@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -163,7 +162,7 @@ async def read_state(r: Any, *, symbol: str | None = None) -> dict[str, Any]:
     if not settings.news_guard_enabled:
         return evaluate([], symbol=symbol)
     try:
-        max_stale_sec = max(60, int(os.getenv("NEWS_GUARD_MAX_STALE_SEC", "900")))
+        max_stale_sec = max(60, int(settings.news_guard_max_stale_sec))
         last_refresh_raw = await r.get(_last_refresh_key())
         if not last_refresh_raw:
             if settings.news_guard_fail_safe:
