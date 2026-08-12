@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import NewsGuardPanel from "./NewsGuardPanel";
+
 type Opp = {
   symbol: string;
   action: string;
@@ -44,35 +46,38 @@ export default function AiInsightsPanel() {
   }, []);
 
   return (
-    <div className="tl-card tl-ai-insights tl-holo">
-      <div className="tl-card-h">AI Insights · advisory</div>
-      {err ? <div className="tl-muted tl-small">Insights unavailable ({err}).</div> : null}
-      {data?.summary ? <div className="tl-ai-ins-summary">{data.summary}</div> : null}
-      {data?.warnings?.length ? (
-        <div className="tl-ai-ins-warn">
-          {data.warnings.map((w, i) => (
-            <div key={`${w.slice(0, 30)}-${i}`} className="tl-ai-ins-warn-line">
-              ⚠ {w}
+    <>
+      <NewsGuardPanel />
+      <div className="tl-card tl-ai-insights tl-holo">
+        <div className="tl-card-h">AI Insights · advisory</div>
+        {err ? <div className="tl-muted tl-small">Insights unavailable ({err}).</div> : null}
+        {data?.summary ? <div className="tl-ai-ins-summary">{data.summary}</div> : null}
+        {data?.warnings?.length ? (
+          <div className="tl-ai-ins-warn">
+            {data.warnings.map((w, i) => (
+              <div key={`${w.slice(0, 30)}-${i}`} className="tl-ai-ins-warn-line">
+                ⚠ {w}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="tl-ai-ins-list">
+          {(data?.opportunities ?? []).slice(0, 8).map((o, i) => (
+            <div key={`${o.symbol}-${i}`} className="tl-ai-ins-opp">
+              <div className="tl-ai-ins-opp-head">
+                <span className="tl-mono">{o.symbol}</span>
+                <span className="tl-pill">{o.action}</span>
+                <span className="tl-ai-ins-conf">{(o.confidence * 100).toFixed(0)}%</span>
+                <span className="tl-ai-ins-risk">{o.risk_level}</span>
+              </div>
+              <div className="tl-muted tl-small">{o.reason}</div>
             </div>
           ))}
+          {!data?.opportunities?.length && !err ? (
+            <div className="tl-muted tl-small">Waiting for signal history…</div>
+          ) : null}
         </div>
-      ) : null}
-      <div className="tl-ai-ins-list">
-        {(data?.opportunities ?? []).slice(0, 8).map((o, i) => (
-          <div key={`${o.symbol}-${i}`} className="tl-ai-ins-opp">
-            <div className="tl-ai-ins-opp-head">
-              <span className="tl-mono">{o.symbol}</span>
-              <span className="tl-pill">{o.action}</span>
-              <span className="tl-ai-ins-conf">{(o.confidence * 100).toFixed(0)}%</span>
-              <span className="tl-ai-ins-risk">{o.risk_level}</span>
-            </div>
-            <div className="tl-muted tl-small">{o.reason}</div>
-          </div>
-        ))}
-        {!data?.opportunities?.length && !err ? (
-          <div className="tl-muted tl-small">Waiting for signal history…</div>
-        ) : null}
       </div>
-    </div>
+    </>
   );
 }
