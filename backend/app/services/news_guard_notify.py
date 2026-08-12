@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -17,37 +18,92 @@ def _targets(event: dict[str, Any] | None) -> str:
     return ", ".join(str(x) for x in values) if values else "global"
 
 
+def _local_time(value: str | None) -> str:
+    if not value:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local = dt.astimezone(ZoneInfo(settings.news_guard_timezone))
+        return local.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return value
+
+
+def _risk_icon(risk: str | None) -> str:
+    value = str(risk or "MODERATE").upper()
+    return {
+        "LOW": "🟢",
+        "MODERATE": "🟡",
+        "HIGH": "🟠",
+        "CRITICAL": "🔴",
+    }.get(value, "⚪")
+
+
+def _event_line(event: dict[str, Any]) -> str:
+    risk = str(event.get("risk") or "MODERATE").upper()
+    title = str(event.get("title") or "Événement économique")
+    meta = event.get("meta") or {}
+    details = []
+    if meta.get("estimate") is not None:
+        details.append(f"est. {meta.get('estimate')}")
+    if meta.get("previous") is not None:
+        details.append(f"préc. {meta.get('previous')}")
+    if meta.get("actual") is not None:
+        details.append(f"réel {meta.get('actual')}")
+    suffix = f" | {' | '.join(details)}" if details else ""
+    return (
+        f"{_risk_icon(risk)} {_local_time(event.get('at'))} Québec — {risk} — "
+        f"{title} — {_targets(event)}{suffix}"
+    )
+
+
 def format_brief(state: dict[str, Any]) -> str:
+    status = str(state.get("status") or "—")
+    risk = str(state.get("risk") or "—")
     lines = [
         "### AlgoSphere News Guard",
-        f"État: {state.get('status', '—')} | Risque: {state.get('risk', '—')}",
+        f"État: {status} | Risque actuel: {risk}",
     ]
-    event = state.get("next_event")
-    if event:
-        lines.extend(
-            [
-                f"Prochaine nouvelle: {event.get('title', 'Événement économique')}",
-                f"Heure: {event.get('at', '—')}",
-                f"Touchés: {_targets(event)}",
-                f"Fenêtre OFF: -{event.get('off_before_min', 0)} / +{event.get('off_after_min', 0)} min",
-            ]
-        )
+
+    active = list(state.get("active_events") or [])
+    if active:
+        lines.append("**En cours / fenêtre OFF :**")
+        for event in active[:4]:
+            lines.append(_event_line(event))
+
+    upcoming = list(state.get("upcoming_events") or [])
+    if not upcoming and state.get("next_event"):
+        upcoming = [state["next_event"]]
+
+    if upcoming:
+        lines.append("**À surveiller :**")
+        for event in upcoming[:6]:
+            lines.append(_event_line(event))
+            if str(event.get("risk") or "").upper() in {"HIGH", "CRITICAL"}:
+                lines.append(
+                    f"↳ fenêtre OFF -{event.get('off_before_min', 0)} / +{event.get('off_after_min', 0)} min"
+                )
     else:
         lines.append("Aucune nouvelle prochaine enregistrée.")
-    return "\n".join(lines)
+
+    if state.get("reason"):
+        lines.append(f"⚠️ Fail-safe: {state.get('reason')}")
+
+    return "\n".join(lines)[:1900]
 
 
 def format_tminus(state: dict[str, Any]) -> str:
     event = state.get("next_event") or {}
     return "\n".join(
         [
-            "⚠️ AlgoSphere News Guard — T-10 min",
-            str(event.get("title") or "Événement économique"),
-            f"Risque: {event.get('risk', state.get('risk', '—'))}",
-            f"Touchés: {_targets(event)}",
+            "⚠️ **AlgoSphere News Guard — T-10 min**",
+            _event_line(event),
+            f"Fenêtre OFF: -{event.get('off_before_min', 0)} / +{event.get('off_after_min', 0)} min",
             "EA: nouvelles entrées bloquées selon la fenêtre News Guard configurée.",
         ]
-    )
+    )[:1900]
 
 
 async def send_discord(message: str) -> dict[str, Any]:
