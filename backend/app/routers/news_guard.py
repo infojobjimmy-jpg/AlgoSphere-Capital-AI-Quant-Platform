@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import secrets
 from typing import Any
 
@@ -59,10 +58,14 @@ async def health():
 
     provider = settings.news_guard_calendar_provider.strip().lower()
     calendar_source_configured = bool(settings.finnhub_api_key) if provider == "finnhub" else False
-    discord_configured = bool(os.getenv("NEWS_GUARD_DISCORD_WEBHOOK_URL", "").strip())
+    discord_configured = bool((settings.news_guard_discord_webhook_url or "").strip())
     sms_configured = all(
-        os.getenv(name, "").strip()
-        for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "NEWS_GUARD_SMS_TO")
+        (
+            (settings.twilio_account_sid or "").strip(),
+            (settings.twilio_auth_token or "").strip(),
+            (settings.twilio_from_number or "").strip(),
+            (settings.news_guard_sms_to or "").strip(),
+        )
     )
     reason = state.get("reason")
     guard_ready = bool(settings.news_guard_enabled) and reason not in {
@@ -81,7 +84,7 @@ async def health():
             "source_configured": calendar_source_configured,
             "last_refresh": last_refresh,
             "event_count": event_count,
-            "max_stale_sec": max(60, int(os.getenv("NEWS_GUARD_MAX_STALE_SEC", "900"))),
+            "max_stale_sec": max(60, int(settings.news_guard_max_stale_sec)),
         },
         "notifications": {
             "discord_configured": discord_configured,
