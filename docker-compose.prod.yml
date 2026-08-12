@@ -23,6 +23,9 @@ services:
 
   trading:
     profiles: ["trading"]
+    env_file:
+      - ./backend/.env.example
+      - ./backend/.env
 
   caddy:
     image: caddy:2.10-alpine
