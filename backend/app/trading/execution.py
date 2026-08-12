@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.services.news_guard import read_state as read_news_guard_state
 from app.trading.brokers.base import BrokerError, OrderRequest
 from app.trading.brokers.factory import get_live_broker_adapter
 from app.trading.paper_exec import choose_trade_signal, load_paper_state, maybe_trade_from_signals
@@ -102,6 +103,16 @@ async def _execute_live_from_signals(r: Any, session: AsyncSession, signals: lis
     if not symbol or entry <= 0:
         return
 
+    guard = await read_news_guard_state(r, symbol=symbol)
+    if guard.get("status") != "ON":
+        logger.warning(
+            "live trade blocked by News Guard: symbol=%s risk=%s reason=%s",
+            symbol,
+            guard.get("risk"),
+            guard.get("reason", "economic_event"),
+        )
+        return
+
     kill_raw = await r.get(settings.redis_trading_kill_key())
     kill_switch = kill_raw == "1" or bool(settings.trading_kill_switch)
     account = await _load_live_account_state(r)
@@ -119,7 +130,7 @@ async def _execute_live_from_signals(r: Any, session: AsyncSession, signals: lis
 
     qty = notional / entry
     stop = rm.stop_price(side=side, entry=entry)
-    req = OrderRequest(symbol=symbol, side=side, qty=qty, stop_price=stop, notional_usd=notional, meta={"signal": top})
+    req = OrderRequest(symbol=symbol, side=side, qty=qty, stop_price=stop, notional_usd=notional, meta={"signal": top, "news_guard": guard})
 
     adapter = get_live_broker_adapter()
     result = await adapter.execute_order(req)
@@ -133,7 +144,7 @@ async def _execute_live_from_signals(r: Any, session: AsyncSession, signals: lis
         "stop": stop,
         "notional": notional,
         "status": result.status,
-        "meta": {"signal": top, "broker_result": result.raw},
+        "meta": {"signal": top, "news_guard": guard, "broker_result": result.raw},
     }
     await _persist_live_order(session, row)
 
